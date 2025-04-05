@@ -19,14 +19,14 @@ const queryClient = new QueryClient({
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <LocalPrivyProvider>
+    <LocalPrivyProvider>
+      <QueryClientProvider client={queryClient}>
         <ErrorBoundary>
           <Component {...pageProps} />
           <Toaster />
         </ErrorBoundary>
-      </LocalPrivyProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </LocalPrivyProvider>
   );
 }

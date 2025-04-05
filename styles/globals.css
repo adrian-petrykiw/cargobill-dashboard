@@ -92,6 +92,21 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
   }
+
+  /* Apply font families directly */
+  html, body {
+    font-family: 'Inter', sans-serif !important;
+  }
+  
+  /* Apply Inter to all text elements by default */
+  p, span, div, button, input, textarea, select, a, li, td, th {
+    font-family: 'Inter', sans-serif !important;
+  }
+  
+  /* Apply DM Sans to all heading elements */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'DM Sans', sans-serif !important;
+  }
 }
 
 @layer base {
@@ -101,4 +116,302 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Utility classes for explicit font application */
+@layer utilities {
+  /* Font family utilities */
+  .font-dm-sans {
+    font-family: 'DM Sans', sans-serif !important;
+  }
+  
+  .font-inter {
+    font-family: 'Inter', sans-serif !important;
+  }
+  
+  /* Font weight utilities for both fonts */
+  .font-thin {
+    font-weight: 100 !important;
+  }
+  .font-extralight {
+    font-weight: 200 !important;
+  }
+  .font-light {
+    font-weight: 300 !important;
+  }
+  .font-normal, .font-regular {
+    font-weight: 400 !important;
+  }
+  .font-medium {
+    font-weight: 500 !important;
+  }
+  .font-semibold {
+    font-weight: 600 !important;
+  }
+  .font-bold {
+    font-weight: 700 !important;
+  }
+  .font-extrabold {
+    font-weight: 800 !important;
+  }
+  .font-black {
+    font-weight: 900 !important;
+  }
+  
+  /* Font style utilities */
+  .font-italic {
+    font-style: italic !important;
+  }
+  .font-normal-style {
+    font-style: normal !important;
+  }
+
+  /* Specific combined utilities */
+  .font-dm-sans-thin {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 100 !important;
+  }
+  .font-dm-sans-extralight {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 200 !important;
+  }
+  .font-dm-sans-light {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 300 !important;
+  }
+  .font-dm-sans-regular {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 400 !important;
+  }
+  .font-dm-sans-medium {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+  }
+  .font-dm-sans-semibold {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 600 !important;
+  }
+  .font-dm-sans-bold {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 700 !important;
+  }
+  .font-dm-sans-extrabold {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 800 !important;
+  }
+  .font-dm-sans-black {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 900 !important;
+  }
+  
+  /* DM Sans italic variations */
+  .font-dm-sans-thin-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 100 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-extralight-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 200 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-light-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 300 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-regular-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 400 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-medium-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-semibold-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 600 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-bold-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 700 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-extrabold-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 800 !important;
+    font-style: italic !important;
+  }
+  .font-dm-sans-black-italic {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 900 !important;
+    font-style: italic !important;
+  }
+  
+  /* Inter variations */
+  .font-inter-thin {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 100 !important;
+  }
+  .font-inter-extralight {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 200 !important;
+  }
+  .font-inter-light {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 300 !important;
+  }
+  .font-inter-regular {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 400 !important;
+  }
+  .font-inter-medium {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+  }
+  .font-inter-semibold {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+  }
+  .font-inter-bold {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+  }
+  .font-inter-extrabold {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 800 !important;
+  }
+  .font-inter-black {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 900 !important;
+  }
+  
+  /* Inter italic variations */
+  .font-inter-thin-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 100 !important;
+    font-style: italic !important;
+  }
+  .font-inter-extralight-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 200 !important;
+    font-style: italic !important;
+  }
+  .font-inter-light-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 300 !important;
+    font-style: italic !important;
+  }
+  .font-inter-regular-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 400 !important;
+    font-style: italic !important;
+  }
+  .font-inter-medium-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    font-style: italic !important;
+  }
+  .font-inter-semibold-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-style: italic !important;
+  }
+  .font-inter-bold-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+    font-style: italic !important;
+  }
+  .font-inter-extrabold-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 800 !important;
+    font-style: italic !important;
+  }
+  .font-inter-black-italic {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 900 !important;
+    font-style: italic !important;
+  }
+}
+
+/* Privy Modal Font Styling */
+/* Target Privy modal specifically with their exact class names */
+.jJpybo h1, 
+.jJpybo h2, 
+.jJpybo h3, 
+.jJpybo h4, 
+.jJpybo h5, 
+.jJpybo h6,
+.jJpybo [class*="Title"],
+.jJpybo [id*="privy-dialog-title"],
+div[id*="privy-dialog-title"],
+.jJpybo [class*="Header"],
+.TitleContainer-sc-f295093d-5 {
+  font-family: 'DM Sans', sans-serif !important;
+}
+
+.jJpybo,
+.jJpybo p, 
+.jJpybo span, 
+.jJpybo div:not([class*="Title"]):not([class*="Header"]), 
+.jJpybo button, 
+.jJpybo input, 
+.jJpybo a,
+.StylesWrapper-sc-bc1e4b4-0,
+div[id="privy-modal-content"] *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Additional catch-all for dialog elements */
+[role="dialog"] h1,
+[role="dialog"] h2, 
+[role="dialog"] h3, 
+[role="dialog"] h4, 
+[role="dialog"] h5, 
+[role="dialog"] h6,
+[role="dialog"] [class*="Title"],
+[role="dialog"] [class*="Header"] {
+  font-family: 'DM Sans', sans-serif !important;
+}
+
+[role="dialog"] *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not([class*="Title"]):not([class*="Header"]) {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* One more approach using very specific selectors */
+#headlessui-dialog-panel_1 h1,
+#headlessui-dialog-panel_1 h2,
+#headlessui-dialog-panel_1 h3,
+#headlessui-dialog-panel_1 h4,
+#headlessui-dialog-panel_1 h5,
+#headlessui-dialog-panel_1 h6 {
+  font-family: 'DM Sans', sans-serif !important;
+}
+
+#headlessui-dialog-panel_1 *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Additional selectors from screenshot */
+div[class*="privy-modal-content"] h1,
+div[class*="privy-modal-content"] h2,
+div[class*="privy-modal-content"] h3,
+div[class*="privy-modal-content"] h4,
+div[class*="privy-modal-content"] h5,
+div[class*="privy-modal-content"] h6,
+div[id*="privy-dialog-title"],
+div[class*="StyledHeader"],
+div[class*="TitleContainer"] {
+  font-family: 'DM Sans', sans-serif !important;
+}
+
+div[class*="privy-modal-content"] p,
+div[class*="privy-modal-content"] span,
+div[class*="privy-modal-content"] div:not([class*="Title"]):not([class*="Header"]),
+div[class*="privy-modal-content"] button,
+div[class*="privy-modal-content"] input {
+  font-family: 'Inter', sans-serif !important;
 }

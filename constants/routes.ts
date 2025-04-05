@@ -1,7 +1,7 @@
 export const ROUTES = {
   AUTH: {
-    LOGIN: '/login',
-    REGISTER: '/register',
+    SIGNIN: '/signin',
+    SIGNUP: '/signup',
   },
   DASHBOARD: '/dashboard',
   TRANSACTIONS: {

@@ -3,7 +3,9 @@ import { useRouter } from 'next/router';
 import { usePrivy } from '@privy-io/react-auth';
 import { ROUTES } from '@/constants/routes';
 
-export function useAuth() {
+console.log('useAuth hook loaded');
+
+export default function useAuth() {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy();
   const router = useRouter();
 
@@ -13,7 +15,7 @@ export function useAuth() {
 
   const handleLogout = async () => {
     await logout();
-    router.push(ROUTES.AUTH.LOGIN);
+    router.push(ROUTES.AUTH.SIGNIN);
   };
 
   const verifyServerAuth = async () => {
