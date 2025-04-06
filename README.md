@@ -10,7 +10,18 @@ Make realtime, cross-border logistics payments 24/7, anytime, anywhere in the wo
 
 ## Getting Started
 
-First, run the development server:
+First, install dependencies
+
+```bash
+npm i
+# or
+yarn
+# or
+pnpm i
+```
+
+
+Then, run the development server:
 
 ```bash
 npm run dev
