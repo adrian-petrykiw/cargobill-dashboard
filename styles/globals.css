@@ -6,7 +6,7 @@
   :root {
     --radius: 0.5rem;
     
-    --background: 0 0% 100%;
+    --background: 210 20% 98%;
     --foreground: 222.2 84% 4.9%;
     
     --card: 0 0% 100%;
@@ -41,7 +41,7 @@
     --sidebar-accent: hsl(240 4.8% 95.9%);
     --sidebar-accent-foreground: hsl(240 5.9% 10%);
     --sidebar-border: hsl(220 13% 91%);
-    --sidebar-ring: hsl(217.2 91.2% 59.8%);
+    --sidebar-ring: rgb(59, 130, 246);
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -335,83 +335,4 @@
     font-weight: 900 !important;
     font-style: italic !important;
   }
-}
-
-/* Privy Modal Font Styling */
-/* Target Privy modal specifically with their exact class names */
-.jJpybo h1, 
-.jJpybo h2, 
-.jJpybo h3, 
-.jJpybo h4, 
-.jJpybo h5, 
-.jJpybo h6,
-.jJpybo [class*="Title"],
-.jJpybo [id*="privy-dialog-title"],
-div[id*="privy-dialog-title"],
-.jJpybo [class*="Header"],
-.TitleContainer-sc-f295093d-5 {
-  font-family: 'DM Sans', sans-serif !important;
-}
-
-.jJpybo,
-.jJpybo p, 
-.jJpybo span, 
-.jJpybo div:not([class*="Title"]):not([class*="Header"]), 
-.jJpybo button, 
-.jJpybo input, 
-.jJpybo a,
-.StylesWrapper-sc-bc1e4b4-0,
-div[id="privy-modal-content"] *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
-  font-family: 'Inter', sans-serif !important;
-}
-
-/* Additional catch-all for dialog elements */
-[role="dialog"] h1,
-[role="dialog"] h2, 
-[role="dialog"] h3, 
-[role="dialog"] h4, 
-[role="dialog"] h5, 
-[role="dialog"] h6,
-[role="dialog"] [class*="Title"],
-[role="dialog"] [class*="Header"] {
-  font-family: 'DM Sans', sans-serif !important;
-}
-
-[role="dialog"] *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not([class*="Title"]):not([class*="Header"]) {
-  font-family: 'Inter', sans-serif !important;
-}
-
-/* One more approach using very specific selectors */
-#headlessui-dialog-panel_1 h1,
-#headlessui-dialog-panel_1 h2,
-#headlessui-dialog-panel_1 h3,
-#headlessui-dialog-panel_1 h4,
-#headlessui-dialog-panel_1 h5,
-#headlessui-dialog-panel_1 h6 {
-  font-family: 'DM Sans', sans-serif !important;
-}
-
-#headlessui-dialog-panel_1 *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
-  font-family: 'Inter', sans-serif !important;
-}
-
-/* Additional selectors from screenshot */
-div[class*="privy-modal-content"] h1,
-div[class*="privy-modal-content"] h2,
-div[class*="privy-modal-content"] h3,
-div[class*="privy-modal-content"] h4,
-div[class*="privy-modal-content"] h5,
-div[class*="privy-modal-content"] h6,
-div[id*="privy-dialog-title"],
-div[class*="StyledHeader"],
-div[class*="TitleContainer"] {
-  font-family: 'DM Sans', sans-serif !important;
-}
-
-div[class*="privy-modal-content"] p,
-div[class*="privy-modal-content"] span,
-div[class*="privy-modal-content"] div:not([class*="Title"]):not([class*="Header"]),
-div[class*="privy-modal-content"] button,
-div[class*="privy-modal-content"] input {
-  font-family: 'Inter', sans-serif !important;
 }

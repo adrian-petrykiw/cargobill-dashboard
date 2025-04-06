@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { usePrivy } from '@privy-io/react-auth';
 import { ROUTES } from '@/constants/routes';
 import SimpleNavbar from '../common/SimpleNavbar';
+import Navbar from '../common/Navbar';
 
 type ProtectedLayoutProps = {
   children: React.ReactNode;
@@ -29,7 +30,7 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <SimpleNavbar />
+      <Navbar />
       <main className="container mx-auto px-4 py-8">{children}</main>
     </div>
   );
