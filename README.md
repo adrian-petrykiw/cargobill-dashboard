@@ -1,9 +1,10 @@
-> ⚠️ **WARNING**: This repository is under active development. Features and connected APIs may change without notice.
-
-
 # CargoBill Dashboard
 
 Make realtime, cross-border logistics payments 24/7, anytime, anywhere in the world
+
+---
+
+> ⚠️ **WARNING**: This repository is under active development. Features and connected APIs may change without notice.
 
 ---
 
