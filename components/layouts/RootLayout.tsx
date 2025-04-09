@@ -1,3 +1,5 @@
+// components/layouts/RootLayout.tsx
+
 import Head from 'next/head';
 
 type RootLayoutProps = {

@@ -1,7 +1,11 @@
+// pages/404.tsx
+
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ROUTES } from '@/constants/routes';
 
 export default function Custom404() {
@@ -13,24 +17,26 @@ export default function Custom404() {
         <title>Page Not Found | CargoBill</title>
       </Head>
 
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-        <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-lg text-center">
-          <h1 className="text-6xl font-bold text-primary mb-2">404</h1>
-          <h2 className="text-2xl font-semibold text-gray-800 mb-6">Page Not Found</h2>
-          <p className="text-gray-600 mb-8">
-            The page you're looking for doesn't exist or has been moved.
-          </p>
-
-          <div className="flex flex-col space-y-4">
-            <Button onClick={() => router.back()} variant="outline" className="w-full">
+      <div className="flex h-screen w-full items-center justify-center bg-gray-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="flex flex-col items-center space-y-2 pt-8">
+            <CardTitle className="text-6xl font-bold text-primary">404</CardTitle>
+            <CardDescription className="text-xl font-semibold text-gray-800">
+              Page Not Found
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 p-6">
+            <p className="text-center text-gray-600 mb-4 text-sm">
+              The page you're looking for doesn't exist or has been moved.
+            </p>
+            <Button onClick={() => router.back()} variant="outline" className="w-full h-10">
               Go Back
             </Button>
-
             <Link href={ROUTES.DASHBOARD} passHref>
-              <Button className="w-full">Return to Dashboard</Button>
+              <Button className="w-full h-10">Return to Dashboard</Button>
             </Link>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </>
   );

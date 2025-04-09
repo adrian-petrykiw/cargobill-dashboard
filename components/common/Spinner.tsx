@@ -7,11 +7,7 @@ interface SpinnerProps {
   className?: string;
 }
 
-const Spinner: React.FC<SpinnerProps> = ({
-  size = '2rem', // default size
-  color = '#3b82f6', // default blue color
-  className = '',
-}) => {
+const Spinner: React.FC<SpinnerProps> = ({ size = '2rem', color = '#3b82f6', className = '' }) => {
   return (
     <div className={`relative ${className}`} style={{ width: size, height: size }}>
       <svg className="animate-spin h-full w-full" viewBox="0 0 100 100">

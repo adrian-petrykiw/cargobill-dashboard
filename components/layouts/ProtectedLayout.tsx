@@ -1,15 +1,19 @@
+// components/layouts/ProtectedLayout.tsx
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { usePrivy } from '@privy-io/react-auth';
 import { ROUTES } from '@/constants/routes';
-import SimpleNavbar from '../common/SimpleNavbar';
-import Navbar from '../common/Navbar';
+import AppSidebar from '../common/AppSidebar';
+import AppHeader from '../common/AppHeader';
+import Spinner from '../common/Spinner';
 
 type ProtectedLayoutProps = {
   children: React.ReactNode;
+  title?: string;
 };
 
-export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
+export default function ProtectedLayout({ children, title = 'CargoBill' }: ProtectedLayoutProps) {
   const router = useRouter();
   const { ready, authenticated } = usePrivy();
 
@@ -22,16 +26,25 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
   // Show loading state while checking authentication
   if (!ready || !authenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <main className="container mx-auto px-4 py-8">{children}</main>
-    </div>
+    <>
+      <Head>
+        <title>{title}</title>
+      </Head>
+
+      <div className="flex h-screen flex-col">
+        <AppHeader />
+        <div className="flex flex-1 overflow-hidden">
+          <AppSidebar />
+          <main className="flex-1 overflow-y-auto bg-gray-50 p-6">{children}</main>
+        </div>
+      </div>
+    </>
   );
 }

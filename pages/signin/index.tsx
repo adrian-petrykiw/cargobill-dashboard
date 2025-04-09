@@ -1,3 +1,5 @@
+// @/pages/signin/index.tsx
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useLogin, usePrivy } from '@privy-io/react-auth';

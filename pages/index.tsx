@@ -1,3 +1,5 @@
+// pages/index.tsx
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { usePrivy } from '@privy-io/react-auth';
@@ -5,7 +7,7 @@ import { PrivyClient } from '@privy-io/server-auth';
 import { GetServerSideProps } from 'next';
 import { ROUTES } from '@/constants/routes';
 import RootLayout from '@/components/layouts/RootLayout';
-import Spinner from '@/components/Spinner';
+import Spinner from '@/components/common/Spinner';
 
 // Server-side authentication check
 // export const getServerSideProps: GetServerSideProps = async ({ req }) => {
