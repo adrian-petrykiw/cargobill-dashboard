@@ -1,4 +1,3 @@
-// components/common/AppHeader.tsx
 import { Fragment } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -6,18 +5,34 @@ import { usePrivy } from '@privy-io/react-auth';
 import { Menu, Transition } from '@headlessui/react';
 import { ROUTES } from '@/constants/routes';
 import useAuth from '@/features/auth/hooks/useAuth';
+import { useCurrency } from '@/hooks/useCurrency';
+import { currencyOptions } from '@/constants/currencyData';
+import NotificationsPopover from '../providers/NotificationsPopover';
+import { useNotifications } from '@/hooks/useNotifications';
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // Import icons from react-icons
-import { MdSettings, MdOutlineLogout, MdNotifications } from 'react-icons/md';
+import { MdSettings, MdOutlineLogout } from 'react-icons/md';
 import { IoMdHelpCircle } from 'react-icons/io';
 
 function classNames(...classes: (string | boolean)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function AppHeader() {
+// This is an enhanced version of AppHeader that actually uses the notification system
+// You can use this for demonstration or replace your actual AppHeader with this
+export default function EnhancedAppHeader() {
   const { user } = usePrivy();
   const { logout } = useAuth();
+  const { currency, setCurrency } = useCurrency();
+  const { notifications, clearAllNotifications, markAsRead } = useNotifications();
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-white">
@@ -34,20 +49,33 @@ export default function AppHeader() {
           </Link>
         </div>
 
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-6 mr-2">
           {/* Currency Selector */}
-          <div className="flex items-center border rounded-md px-3 py-1 text-sm font-medium">
-            <span>USD</span>
+          <div className="flex items-center">
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger className="w-auto h-auto border-0 focus:ring-0 focus:ring-offset-0 shadow-none gap-1 px-2 py-1">
+                <SelectValue placeholder="Currency" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {currencyOptions.map((option) => (
+                  <SelectItem key={option} value={option} className="hover:cursor-pointer">
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Notifications */}
-          <button className="relative rounded-sm p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-600 bg-pink">
-            <MdNotifications className="h-5 w-5" />
-          </button>
+          {/* Notifications Popover */}
+          <NotificationsPopover
+            notifications={notifications}
+            onClearAll={clearAllNotifications}
+            onReadNotification={markAsRead}
+          />
 
           {/* Profile dropdown */}
           <Menu as="div" className="relative">
-            <Menu.Button className="flex items-center gap-2 rounded-sm bg-slate-900 p-1 mr-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <Menu.Button className="flex items-center gap-2 rounded-sm bg-slate-900 p-1 ml-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
               <span className="sr-only">Open user menu</span>
               <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium">
                 {user?.email?.address?.[0]?.toUpperCase() || 'A'}
