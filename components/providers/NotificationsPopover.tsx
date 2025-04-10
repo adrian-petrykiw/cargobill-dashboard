@@ -1,7 +1,7 @@
 // components/providers/NotificationsPopover.tsx
 import { Fragment } from 'react';
 import { Popover, Transition } from '@headlessui/react';
-import { MdNotifications } from 'react-icons/md';
+import { MdInbox, MdNotifications } from 'react-icons/md';
 
 interface Notification {
   id: string;
@@ -28,8 +28,7 @@ export default function NotificationsPopover({
         <>
           <Popover.Button
             className={`
-              relative rounded-sm p-1 text-slate-900 hover:text-slate-900
-              ${open ? 'bg-slate-100' : ''}
+              relative rounded-sm p-1 text-slate-900 hover:text-slate-900 
             `}
           >
             <MdNotifications className="h-5 w-5" />
@@ -48,7 +47,7 @@ export default function NotificationsPopover({
           >
             <Popover.Panel className="absolute right-0 z-10 mt-2 w-80 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none">
               <div className="border-b border-gray-100">
-                <div className="flex items-center justify-between p-4">
+                <div className="flex items-center justify-between px-4 py-2">
                   <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
                   <button
                     onClick={onClearAll}
@@ -61,10 +60,10 @@ export default function NotificationsPopover({
 
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                    <MdNotifications className="h-6 w-6 text-gray-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
+                    <MdInbox className="h-6 w-6 text-gray-400" />
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">No notifications</p>
+                  <p className="mt-2 text-xs text-gray-500">No notifications</p>
                 </div>
               ) : (
                 <div className="max-h-80 overflow-y-auto">

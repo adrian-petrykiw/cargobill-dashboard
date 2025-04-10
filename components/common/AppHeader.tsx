@@ -53,10 +53,10 @@ export default function EnhancedAppHeader() {
           {/* Currency Selector */}
           <div className="flex items-center">
             <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger className="w-auto h-auto border-0 focus:ring-0 focus:ring-offset-0 shadow-none gap-1 px-2 py-1">
+              <SelectTrigger className="w-auto h-auto border-0 focus:ring-0 focus:ring-offset-0 shadow-none gap-1 p-1">
                 <SelectValue placeholder="Currency" />
               </SelectTrigger>
-              <SelectContent align="end">
+              <SelectContent align="center">
                 {currencyOptions.map((option) => (
                   <SelectItem key={option} value={option} className="hover:cursor-pointer">
                     {option}
@@ -75,7 +75,7 @@ export default function EnhancedAppHeader() {
 
           {/* Profile dropdown */}
           <Menu as="div" className="relative">
-            <Menu.Button className="flex items-center gap-2 rounded-sm bg-slate-900 p-1 ml-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <Menu.Button className="flex items-center gap-2 rounded-sm bg-slate-900 p-1 ml-3 text-white focus:outline-none">
               <span className="sr-only">Open user menu</span>
               <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium">
                 {user?.email?.address?.[0]?.toUpperCase() || 'A'}
