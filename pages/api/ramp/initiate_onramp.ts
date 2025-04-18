@@ -73,7 +73,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Check if entity is a business
       if (entityResult.data.entity.type !== 'business') {
         return res.status(400).json({
           error: 'Entity is not a business',
