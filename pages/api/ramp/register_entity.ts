@@ -5,12 +5,12 @@ import * as privyService from '../_services/privyService';
 import { User } from '@privy-io/server-auth';
 
 /**
- * Register a new entity with Zynk
+ * Register a new business entity with Zynk
  *
  * This endpoint:
- * 1. Verifies the user via Privy
- * 2. Checks if an entity already exists for this user
- * 3. Creates a new entity if one doesn't exist
+ * 1. Verifies the user via Privy (authentication only)
+ * 2. Uses the business email from request body to check if an entity already exists
+ * 3. Creates a new business entity if one doesn't exist
  * 4. Returns the entity ID
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -28,27 +28,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Missing authentication token' });
     }
 
-    // Verify the user
+    // Verify the user (authentication only, not using their email)
     const claims = await privyService.verifyToken(authToken);
-    const userId = claims.userId;
 
-    // Get user data from Privy
-    const privyUser: User = await privyService.getUser(userId);
+    // Extract required fields from request body
+    const {
+      type,
+      firstName,
+      lastName,
+      email, // Business email from request, not from authenticated user
+      phoneNumberPrefix,
+      phoneNumber,
+      nationality,
+      dateOfBirth,
+      permanentAddress,
+    } = req.body;
 
-    // Ensure email exists before trying to access it
-    if (!privyUser.email?.address) {
+    // Validate business email
+    if (!email) {
       return res.status(400).json({
-        error: 'User does not have a verified email address',
-        message: 'Please link an email address to your account before registering an entity.',
+        error: 'Missing business email',
+        message: 'A business email address is required for entity registration.',
       });
     }
 
-    // Check if entity already exists in Zynk by email
-    let entityId;
+    // Enforce business type only
+    if (type && type !== 'business') {
+      return res.status(400).json({
+        error: 'Invalid entity type',
+        message: 'Only business entities can be registered with this application.',
+      });
+    }
 
+    // Check if entity already exists in Zynk by business email
+    let entityId;
     try {
-      const zynkEntity = await zynkService.getEntityByEmail(privyUser.email.address);
+      const zynkEntity = await zynkService.getEntityByEmail(email);
       if (zynkEntity.success && zynkEntity.data.entity) {
+        // Check if the existing entity is a business
+        if (zynkEntity.data.entity.type !== 'business') {
+          return res.status(400).json({
+            error: 'Entity exists but is not a business',
+            message:
+              'An individual entity already exists with this email. Please contact support to convert it to a business entity.',
+          });
+        }
+
         entityId = zynkEntity.data.entity.entityId;
 
         // Entity already exists, return it
@@ -56,26 +81,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           success: true,
           data: {
             entityId,
-            message: 'Entity already exists',
+            message: 'Business entity already exists',
             entity: zynkEntity.data.entity,
           },
         });
       }
     } catch (error) {
-      // Entity doesn't exist, we'll create it
+      // Log error but continue (entity likely doesn't exist)
+      console.log("Entity lookup error (expected if entity doesn't exist):", error);
     }
-
-    // Extract required fields from request body
-    const {
-      type = 'individual', // Default to individual if not specified
-      firstName,
-      lastName,
-      phoneNumberPrefix,
-      phoneNumber,
-      nationality,
-      dateOfBirth,
-      permanentAddress,
-    } = req.body;
 
     // Validate required fields
     if (
@@ -120,12 +134,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Create entity in Zynk
+    // Create business entity in Zynk with business email from request
     const createResult = await zynkService.createEntity({
-      type,
+      type: 'business', // Always set to business regardless of what was provided
       firstName,
       lastName,
-      email: privyUser.email.address,
+      email, // Using business email from request
       phoneNumberPrefix,
       phoneNumber,
       nationality,
@@ -135,7 +149,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!createResult.success) {
       return res.status(400).json({
-        error: 'Failed to create entity in Zynk',
+        error: 'Failed to create business entity in Zynk',
         details: createResult.data,
       });
     }
@@ -147,7 +161,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       success: true,
       data: {
         entityId,
-        message: 'Entity created successfully',
+        message: 'Business entity created successfully',
       },
     });
   } catch (error: any) {

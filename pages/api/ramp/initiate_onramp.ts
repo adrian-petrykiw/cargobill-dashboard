@@ -8,10 +8,11 @@ import { v4 as uuidv4 } from 'uuid';
  * Initiate the onramp process after user has selected jurisdiction and amount
  *
  * This endpoint:
- * 1. Verifies the user
- * 2. Ensures the entity has necessary accounts
- * 3. Simulates the transfer
- * 4. Returns execution data for client to complete the transfer
+ * 1. Verifies the user (authentication only)
+ * 2. Validates the business entity exists
+ * 3. Ensures the entity has necessary accounts
+ * 4. Simulates the transfer
+ * 5. Returns execution data for client to complete the transfer
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -19,7 +20,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Extract auth token from request
     const headerAuthToken = req.headers.authorization?.replace(/^Bearer /, '');
     const cookieAuthToken = req.cookies['privy-token'];
     const authToken = cookieAuthToken || headerAuthToken;
@@ -28,10 +28,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Missing authentication token' });
     }
 
-    // Verify the user
-    const claims = await privyService.verifyToken(authToken);
+    await privyService.verifyToken(authToken);
 
-    // Extract required parameters from request body
     const {
       entityId,
       jurisdictionId,
@@ -58,7 +56,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       counterPartyRiskAcknowledged = false,
     } = req.body;
 
-    // Validate required fields
     if (!entityId || !jurisdictionId || (!amount && !exactAmountOut)) {
       return res.status(400).json({
         error: 'Missing required parameters',
@@ -66,7 +63,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Check if entity has the necessary account for this jurisdiction
+    // Verify entity exists by ID and is a business
+    try {
+      const entityResult = await zynkService.getEntityById(entityId);
+      if (!entityResult.success) {
+        return res.status(404).json({
+          error: 'Entity not found',
+          message: 'The specified entity could not be found.',
+        });
+      }
+
+      // Check if entity is a business
+      if (entityResult.data.entity.type !== 'business') {
+        return res.status(400).json({
+          error: 'Entity is not a business',
+          message: 'Only business entities can initiate onramps in this application.',
+        });
+      }
+    } catch (error) {
+      console.error('Error verifying entity:', error);
+      return res.status(500).json({
+        error: 'Failed to verify entity',
+        message: 'Unable to verify the specified entity.',
+      });
+    }
+
     let accountId;
     const accountsResult = await zynkService.getEntityAccounts(entityId);
 
@@ -106,7 +127,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Prepare account creation parameters based on jurisdiction type
       const accountParams: any = {
         jurisdictionID: jurisdictionId,
       };
@@ -162,7 +182,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       accountId = createAccountResult.data.accountId;
     }
 
-    // Get KYC status for this entity
     const kycStatusResult = await zynkService.getKycStatus(entityId);
 
     if (!kycStatusResult.success) {
@@ -172,7 +191,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Check if KYC is approved for this route
     const kycStatus = kycStatusResult.data.status;
     const routeApproved = kycStatus.some(
       (status: any) =>
@@ -185,7 +203,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ),
     );
 
-    // If KYC is not approved, return the requirements
     if (!routeApproved) {
       // Find the appropriate routing provider for this jurisdiction
       const routingProvider = kycStatus.find((status: any) =>
@@ -199,7 +216,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (routingProvider) {
         const routingId = routingProvider.routingId;
 
-        // Get KYC requirements
         const requirementsResult = await zynkService.getKycRequirements(entityId, routingId);
 
         if (!requirementsResult.success) {
@@ -228,9 +244,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
     }
-
-    // For this example, we're simulating onramp from a fiat account to a blockchain account
-    // For a real implementation, you would use accounts from different entities
 
     // Get available providers for this simulation
     const allProviders = kycStatus.filter(
@@ -265,7 +278,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       exactAmountOut: exactAmountOut,
     };
 
-    // Simulate the transfer
     const simulateResult = await zynkService.simulateTransfer(simulateParams);
 
     if (!simulateResult.success) {

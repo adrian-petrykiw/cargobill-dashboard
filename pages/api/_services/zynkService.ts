@@ -1,8 +1,6 @@
 // pages/api/_services/zynkService.ts
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-
-// Types
 import {
   CreateEntityParams,
   EntityAddress,
@@ -12,11 +10,9 @@ import {
   ZynkResponse,
 } from '@/types/zynk';
 
-// Constants
 const ZYNK_API_KEY = process.env.ZYNK_API_KEY;
 const ZYNK_API_URL = 'https://qaapi.zynklabs.xyz/api/v1';
 
-// Initialize Zynk API client
 const zynkClient: AxiosInstance = axios.create({
   baseURL: ZYNK_API_URL,
   headers: {
@@ -26,7 +22,6 @@ const zynkClient: AxiosInstance = axios.create({
   },
 });
 
-// Error handling helper
 const handleZynkError = (error: unknown, operation: string) => {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError;
@@ -296,7 +291,6 @@ export async function getAllTransfers(): Promise<ZynkResponse> {
   }
 }
 
-// Export default object with all functions
 export default {
   // Entity Management
   createEntity,

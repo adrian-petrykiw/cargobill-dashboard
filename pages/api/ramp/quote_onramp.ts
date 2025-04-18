@@ -2,14 +2,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as zynkService from '../_services/zynkService';
 import * as privyService from '../_services/privyService';
-import { User } from '@privy-io/server-auth';
 
 /**
- * Get an onramp quote for a user
+ * Get an onramp quote for a business entity
  *
  * This endpoint:
- * 1. Verifies the user via Privy
- * 2. Fetches the entity in Zynk (returns error if not found)
+ * 1. Verifies the user via Privy (authentication only)
+ * 2. Fetches the entity by ID from the request
  * 3. Gets jurisdictions to determine available onramp options
  * 4. Returns the necessary data to continue the onramp process
  */
@@ -19,7 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Extract auth token from request
     const headerAuthToken = req.headers.authorization?.replace(/^Bearer /, '');
     const cookieAuthToken = req.cookies['privy-token'];
     const authToken = cookieAuthToken || headerAuthToken;
@@ -28,46 +26,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Missing authentication token' });
     }
 
-    // Verify the user
-    const claims = await privyService.verifyToken(authToken);
-    const userId = claims.userId;
+    await privyService.verifyToken(authToken);
 
-    // Get user data from Privy
-    const privyUser: User = await privyService.getUser(userId);
+    const { entityId: requestEntityId, businessEmail } = req.body;
 
-    // Check if entity already exists in Zynk by email
-    let entityId;
+    let entityId = requestEntityId;
 
-    // Ensure email exists before trying to access it
-    if (!privyUser.email?.address) {
+    if (!entityId && !businessEmail) {
       return res.status(400).json({
-        error: 'User does not have a verified email address',
-        message: 'Please link an email address to your account before proceeding.',
+        error: 'Missing entity identification',
+        message: 'Either entityId or businessEmail must be provided to get an onramp quote.',
       });
     }
 
+    // If entityId is not provided but businessEmail is, try to get the entity by email
+    if (!entityId && businessEmail) {
+      try {
+        const zynkEntity = await zynkService.getEntityByEmail(businessEmail);
+        if (zynkEntity.success && zynkEntity.data.entity) {
+          entityId = zynkEntity.data.entity.entityId;
+        } else {
+          return res.status(404).json({
+            error: 'Entity not found with provided email',
+            message: 'No entity found with the provided business email. Please register first.',
+          });
+        }
+      } catch (error) {
+        console.error('Error looking up entity by email:', error);
+        return res.status(404).json({
+          error: 'Entity not registered with Zynk',
+          message: 'Please register your business information before requesting an onramp quote.',
+        });
+      }
+    }
+
+    // Verify entity exists by ID
     try {
-      const zynkEntity = await zynkService.getEntityByEmail(privyUser.email.address);
-      if (zynkEntity.success && zynkEntity.data.entity) {
-        entityId = zynkEntity.data.entity.entityId;
+      const entityResult = await zynkService.getEntityById(entityId);
+      if (!entityResult.success) {
+        return res.status(404).json({
+          error: 'Entity not found',
+          message: 'The specified entity could not be found. Please register first.',
+        });
+      }
+
+      // Check if the entity is a business
+      if (entityResult.data.entity.type !== 'business') {
+        return res.status(400).json({
+          error: 'Entity is not a business',
+          message: 'Only business entities can request onramp quotes in this application.',
+        });
       }
     } catch (error) {
-      // Entity doesn't exist
-      return res.status(404).json({
-        error: 'Entity not registered with Zynk',
-        message: 'Please register your business information before requesting an onramp quote.',
+      console.error('Error verifying entity:', error);
+      return res.status(500).json({
+        error: 'Failed to verify entity',
+        message: 'Unable to verify the specified entity.',
       });
     }
 
-    // If we still don't have an entityId, return an error
-    if (!entityId) {
-      return res.status(404).json({
-        error: 'Entity not found',
-        message: 'Please register your business information before requesting an onramp quote.',
-      });
-    }
-
-    // Get available jurisdictions for onramping
     const jurisdictionsResult = await zynkService.getJurisdictions();
 
     if (!jurisdictionsResult.success) {
@@ -82,7 +99,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       (jurisdiction: any) => jurisdiction.isActive,
     );
 
-    // Return data needed for the next step in onramp process
     return res.status(200).json({
       success: true,
       data: {
