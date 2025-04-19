@@ -18,10 +18,12 @@ module.exports = {
         primary: {
           DEFAULT: 'var(--primary)',
           foreground: 'var(--primary-foreground)',
+          hover: '#1C31CC', // Darker blue for hover
         },
         secondary: {
           DEFAULT: 'var(--secondary)',
           foreground: 'var(--secondary-foreground)',
+          hover: '#0B1121', // Darker navy for hover
         },
         destructive: {
           DEFAULT: 'var(--destructive)',
@@ -43,13 +45,37 @@ module.exports = {
           DEFAULT: 'var(--card)',
           foreground: 'var(--card-foreground)',
         },
-        tertiary: '#1D4ED8',
-        quaternary: '#0F172A',
-        quinary: '#E2E8F0',
-        senary: '#F9FAFB',
+        blue: {
+          DEFAULT: '#233DFF', // Primary brand color
+          hover: '#1C31CC', // Darker for hover
+        },
+        navy: {
+          DEFAULT: '#0F172A', // Secondary brand color
+          hover: '#0B1121', // Darker for hover
+        },
+        gray: {
+          light: '#E2E8F0', // Tertiary brand color
+          lighter: '#F9FAFB', // Senary brand color
+          hover: '#CBD5E1', // Darker for hover
+        },
+        tertiary: {
+          DEFAULT: '#233DFF', // Blue
+          hover: '#1C31CC', // Darker for hover
+        },
+        quaternary: {
+          DEFAULT: '#0F172A', // Navy
+          hover: '#0B1121', // Darker for hover
+        },
+        quinary: {
+          DEFAULT: '#E2E8F0', // Light gray
+          hover: '#CBD5E1', // Darker for hover
+        },
+        senary: {
+          DEFAULT: '#F9FAFB', // Lighter gray
+          hover: '#E5E7EB', // Darker for hover
+        },
         // black: '#000000',
         // white: '#FFFFFF',
-        // gray: '#A0A0A0',
         // lightGray: '#9ba3af',
         // darkerGray: '#86868B',
         // hoverGreen: '#06d16b',
@@ -122,10 +148,6 @@ module.exports = {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
       },
-      //   backgroundImage: {
-      //     'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-      //     'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
-      //   },
     },
   },
   plugins: [require('tailwindcss-animate')],

@@ -59,7 +59,7 @@ export default function SignupPage() {
   return (
     <RootLayout title="Sign up · CargoBill" description="Create your CargoBill account">
       <div className="flex h-screen w-full items-center justify-center">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-sm">
           <CardHeader className="flex flex-col items-center space-y-1 pt-10">
             <Image
               src="/assets/cargobill_icon_logo.svg"
@@ -74,7 +74,7 @@ export default function SignupPage() {
           <CardContent className="flex flex-col gap-4 p-6">
             <Button
               onClick={login}
-              className="h-12 w-full bg-slate-900 text-white hover:bg-slate-800"
+              className="h-10 w-full bg-slate-900 text-white hover:bg-slate-800"
               size="lg"
             >
               Sign up

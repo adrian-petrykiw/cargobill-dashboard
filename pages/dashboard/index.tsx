@@ -20,8 +20,8 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Overview</h1>
           <div className="flex space-x-3">
-            <Button className="bg-blue-600 hover:bg-blue-700">Send</Button>
-            <Button variant="outline" className="bg-slate-900 text-white hover:bg-slate-800">
+            <Button className="min-w-[12rem] bg-tertiary hover:bg-blue-600">Send</Button>
+            <Button className="min-w-[12rem] bg-slate-900 text-white hover:bg-slate-800">
               Request
             </Button>
           </div>
