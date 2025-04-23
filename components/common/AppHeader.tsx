@@ -44,7 +44,7 @@ export default function EnhancedAppHeader() {
               alt="CargoBill"
               width={32}
               height={32}
-              className="h-8 w-auto"
+              className="h-[1.75rem] w-auto"
             />
           </Link>
         </div>
@@ -77,8 +77,10 @@ export default function EnhancedAppHeader() {
           <Menu as="div" className="relative">
             <Menu.Button className="flex items-center gap-2 rounded-sm bg-slate-900 p-1 ml-3 text-white focus:outline-none">
               <span className="sr-only">Open user menu</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium">
-                {user?.email?.address?.[0]?.toUpperCase() || 'A'}
+              <div className="flex h-[1.75rem] w-[1.75rem] items-center justify-center rounded-full text-sm font-medium">
+                {user?.email?.address?.[0]?.toUpperCase() ||
+                  user?.google?.email?.[0]?.toUpperCase() ||
+                  'NA'}
               </div>
             </Menu.Button>
             <Transition
@@ -90,21 +92,21 @@ export default function EnhancedAppHeader() {
               leaveFrom="transform opacity-100 scale-100"
               leaveTo="transform opacity-0 scale-95"
             >
-              <Menu.Items className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none">
+              <Menu.Items className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none">
                 <div className="px-4 py-2 text-sm">
                   <p className="font-medium text-gray-900">Admin</p>
-                  <p className="text-gray-500 truncate">
+                  <p className="text-gray-500 truncate text-xs">
                     {user?.email?.address || user?.google?.email}
                   </p>
                 </div>
-                <div className="border-t border-gray-100">
+                <div className="border-t border-gray-100 gap-2 p-2">
                   <Menu.Item>
                     {({ active }) => (
                       <Link
                         href={ROUTES.SETTINGS}
                         className={classNames(
                           active ? 'bg-gray-100' : '',
-                          'flex items-center gap-2 px-4 py-2 text-sm text-gray-700',
+                          'flex items-center gap-2 px-4 py-2 text-sm text-gray-700 rounded-sm',
                         )}
                       >
                         <MdSettings className="h-4 w-4" />
@@ -118,7 +120,7 @@ export default function EnhancedAppHeader() {
                         href="#"
                         className={classNames(
                           active ? 'bg-gray-100' : '',
-                          'flex items-center gap-2 px-4 py-2 text-sm text-gray-700',
+                          'flex items-center gap-2 px-4 py-2 text-sm text-gray-700 rounded-sm',
                         )}
                       >
                         <IoMdHelpCircle className="h-4 w-4" />
@@ -132,7 +134,7 @@ export default function EnhancedAppHeader() {
                         onClick={logout}
                         className={classNames(
                           active ? 'bg-gray-100' : '',
-                          'flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-red-600',
+                          'flex items-center gap-2 w-full text-left px-4 py-2 mb-0 text-sm text-red-600 rounded-sm',
                         )}
                       >
                         <MdOutlineLogout className="h-4 w-4" />

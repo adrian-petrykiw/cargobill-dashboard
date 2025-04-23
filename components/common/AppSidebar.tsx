@@ -1,36 +1,27 @@
 // components/common/AppSidebar.tsx
-import { useState, useEffect, Fragment } from 'react';
+import { Fragment, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ROUTES } from '@/constants/routes';
 import { Menu, Transition } from '@headlessui/react';
-
-// Import icons from react-icons
 import { FaHome } from 'react-icons/fa';
 import { BiTransfer } from 'react-icons/bi';
 import { BsBank } from 'react-icons/bs';
 import { AiOutlineCreditCard } from 'react-icons/ai';
 import { MdViewSidebar } from 'react-icons/md';
 import { BsCheck } from 'react-icons/bs';
-
-type SidebarMode = 'expanded' | 'collapsed' | 'hover';
+import { useSidebarStore } from '@/stores/preferences/sidebarStore';
 
 export default function AppSidebar() {
   const router = useRouter();
-  const [mode, setMode] = useState<SidebarMode>('hover');
+  const { mode, setMode } = useSidebarStore();
 
-  // Load saved preference from localStorage if available
+  // Prefetch all navigation routes for instant navigation
   useEffect(() => {
-    const savedMode = localStorage.getItem('sidebarMode');
-    if (savedMode && ['expanded', 'collapsed', 'hover'].includes(savedMode)) {
-      setMode(savedMode as SidebarMode);
-    }
+    navigationItems.forEach((item) => {
+      router.prefetch(item.href);
+    });
   }, []);
-
-  // Save preference to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem('sidebarMode', mode);
-  }, [mode]);
 
   const isActive = (path: string) => {
     return router.pathname === path || router.pathname.startsWith(`${path}/`);
@@ -43,7 +34,6 @@ export default function AppSidebar() {
     { name: 'Cards', href: ROUTES.CARDS, icon: <AiOutlineCreditCard size={18} /> },
   ];
 
-  // Determine sidebar width and hover behavior based on current mode
   const isCollapsed =
     mode === 'collapsed' || (mode === 'hover' && !router.asPath.includes('sidebar-control'));
   const shouldExpandOnHover = mode === 'hover';
@@ -59,10 +49,11 @@ export default function AppSidebar() {
           <Link
             key={item.name}
             href={item.href}
+            prefetch={true}
             className={`flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors mx-2 my-1 ${
               isActive(item.href)
                 ? 'text-slate-900'
-                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                : 'text-slate-400 hover:bg-accent hover:text-slate-900'
             }`}
           >
             <span
@@ -81,7 +72,7 @@ export default function AppSidebar() {
         ))}
       </div>
 
-      {/* Sidebar control menu (like Supabase) */}
+      {/* Sidebar control menu */}
       <div className="mt-auto">
         <Menu as="div" className="relative">
           <Menu.Button
@@ -91,18 +82,6 @@ export default function AppSidebar() {
             <span className={`flex-shrink-0 ${isCollapsed ? 'mx-auto' : ''} `}>
               <MdViewSidebar size={18} />
             </span>
-
-            {/* <span
-              className={`whitespace-nowrap transition-opacity duration-300 ${
-                isCollapsed
-                  ? shouldExpandOnHover
-                    ? 'opacity-0 group-hover:opacity-100'
-                    : 'opacity-0'
-                  : 'opacity-100'
-              }`}
-            >
-              Sidebar control
-            </span> */}
           </Menu.Button>
           <Transition
             as={Fragment}

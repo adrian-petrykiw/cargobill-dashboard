@@ -1,6 +1,6 @@
 // @/hooks/useSelectedCurrency.ts
 
-import { useCurrencyStore } from '@/store/preferences/currencyStore';
+import { useCurrencyStore } from '@/stores/preferences/currencyStore';
 
 // Mock exchange rates (in a real app, you'd fetch these from an API)
 const exchangeRates: Record<string, number> = {

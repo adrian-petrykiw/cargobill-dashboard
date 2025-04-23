@@ -1,5 +1,4 @@
 // pages/dashboard/index.tsx
-
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,11 +11,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import OnboardingChecklist from '@/components/onboarding/OnboardingChecklist';
 
 export default function Dashboard() {
   return (
     <ProtectedLayout title="Dashboard · CargoBill">
       <div className="space-y-5">
+        {/* Add Onboarding Checklist */}
+        <OnboardingChecklist />
+
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Overview</h1>
           <div className="flex space-x-3">
@@ -52,14 +55,14 @@ export default function Dashboard() {
                 {/* Placeholder for chart */}
                 <div className="aspect-[12/3] bg-gray-100 border-gray-200 border-[1px] rounded-md mb-2"></div>
 
-                <div className="flex justify-between space-x-2 p-1 bg-white border-gray-200 border-[1px] rounded-md ">
-                  <Badge className="w-[100%] text-[10px] bg-blue-500 text-white hover:bg-blue-600 py-1">
+                <div className="flex justify-between space-x-2 p-1 bg-white border-gray-200 border-[1px] rounded-md">
+                  <Badge className="w-[100%] text-[10px] bg-blue-500 text-white hover:bg-blue-600 py-1 rounded-sm hover:cursor-pointer">
                     $350,001.10 USDC
                   </Badge>
-                  <Badge className="w-[100%] text-[10px] bg-green-500 text-white hover:bg-green-600 py-1">
+                  <Badge className="w-[100%] text-[10px] bg-green-500 text-white hover:bg-green-600 py-1 rounded-sm hover:cursor-pointer">
                     $250,001.12 USDT
                   </Badge>
-                  <Badge className="w-[100%] text-[10px] bg-purple-500 text-white hover:bg-purple-600 py-1">
+                  <Badge className="w-[100%] text-[10px] bg-purple-500 text-white hover:bg-purple-600 py-1 rounded-sm hover:cursor-pointer">
                     $200,001.12 EURC
                   </Badge>
                 </div>

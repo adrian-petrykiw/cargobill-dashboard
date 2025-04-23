@@ -2,9 +2,9 @@
 'use client';
 
 import { PrivyProvider as Privy } from '@privy-io/react-auth';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 
-export default function LocalPrivyProvider({ children }: { children: React.ReactNode }) {
+function LocalPrivyProvider({ children }: { children: React.ReactNode }) {
   const [isConfigured, setIsConfigured] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -13,8 +13,8 @@ export default function LocalPrivyProvider({ children }: { children: React.React
     const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
     const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
 
-    if (!appId) {
-      console.error('Error configuring Privy: Missing NEXT_PUBLIC_PRIVY_APP_ID');
+    if (!appId || !clientId) {
+      console.error('Error configuring Privy: Missing env');
       setErrorMessage('Privy configuration error: Missing App ID');
       return;
     }
@@ -92,3 +92,5 @@ export default function LocalPrivyProvider({ children }: { children: React.React
     </Privy>
   );
 }
+
+export default memo(LocalPrivyProvider);

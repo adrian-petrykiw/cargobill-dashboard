@@ -1,5 +1,5 @@
 // components/layouts/ProtectedLayout.tsx
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { usePrivy } from '@privy-io/react-auth';
@@ -13,17 +13,18 @@ type ProtectedLayoutProps = {
   title?: string;
 };
 
-export default function ProtectedLayout({ children, title = 'CargoBill' }: ProtectedLayoutProps) {
+function ProtectedLayout({ children, title = 'CargoBill' }: ProtectedLayoutProps) {
   const router = useRouter();
   const { ready, authenticated } = usePrivy();
 
+  // Only redirect if not authenticated
   useEffect(() => {
     if (ready && !authenticated) {
       router.replace(ROUTES.AUTH.SIGNIN);
     }
   }, [ready, authenticated, router]);
 
-  // Show loading state while checking authentication
+  // Show loading state only during initial authentication check
   if (!ready || !authenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -48,3 +49,5 @@ export default function ProtectedLayout({ children, title = 'CargoBill' }: Prote
     </>
   );
 }
+
+export default memo(ProtectedLayout);

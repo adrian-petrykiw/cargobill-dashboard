@@ -1,6 +1,6 @@
 // @/hooks/useCurrency.ts
 import { useCallback } from 'react';
-import { useCurrencyStore } from '@/store/preferences/currencyStore';
+import { useCurrencyStore } from '@/stores/preferences/currencyStore';
 import { useCurrencyExchangeRate } from '@/hooks/useCurrencyExchangeRate';
 import { AnyCurrencyCode } from '@/types/currency';
 
