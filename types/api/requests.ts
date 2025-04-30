@@ -27,7 +27,6 @@ export interface GetOrganizationRequest {
   id: string;
 }
 
-// Use type aliases to avoid conflicts
 export type CreateOrganizationRequest = SchemaCreateOrgRequest;
 export type UpdateOrganizationRequest = SchemaUpdateOrgRequest;
 

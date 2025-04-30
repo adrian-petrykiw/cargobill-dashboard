@@ -1,5 +1,5 @@
 // pages/api/_services/supabaseService.ts
-import { organizationRepository } from './database/repositories/organizationRepository';
+import { organizationRepository } from './repositories/organizationRepository';
 
 // Re-export all repositories
 export const supabaseService = {

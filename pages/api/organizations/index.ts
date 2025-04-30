@@ -1,38 +1,41 @@
 // pages/api/organizations/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withAuthMiddleware } from '../_middleware/withAuth';
-import { supabaseService } from '../_services/supabaseService';
+import { organizationRepository } from '../_services/repositories/organizationRepository';
 import { createOrganizationSchema } from '@/schemas/organization.schema';
-import { ApiResponse } from '@/types/api/responses';
+import { ApiError } from '@/types/api/errors';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { user } = req as any; // User added by middleware
+  const { user } = req as any; // From middleware
 
   try {
+    // GET: Retrieve organizations
     if (req.method === 'GET') {
-      const organizations = await supabaseService.organizations.getByUserId(user.id);
+      const organizations = await organizationRepository.getByUserId(user.id);
       return res.status(200).json({
         success: true,
         data: organizations,
       });
     }
 
+    // POST: Create organization
     if (req.method === 'POST') {
       try {
-        // Validate request body with Zod
+        // Validate with Zod
         const result = createOrganizationSchema.safeParse(req.body);
 
         if (!result.success) {
           return res.status(400).json({
             success: false,
             error: {
+              code: 'VALIDATION_ERROR',
               message: 'Invalid organization data',
               details: result.error.format(),
             },
           });
         }
 
-        const newOrg = await supabaseService.organizations.create(result.data, user.id);
+        const newOrg = await organizationRepository.create(result.data, user.id);
 
         return res.status(201).json({
           success: true,
@@ -40,32 +43,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         });
       } catch (error) {
         console.error('Failed to create organization:', error);
-        return res.status(500).json({
-          success: false,
-          error: {
-            message: 'Failed to create organization',
-            details: error instanceof Error ? error.message : String(error),
-          },
-        });
+        return res.status(500).json(ApiError.internalServerError(error));
       }
     }
 
     // Method not allowed
-    return res.status(405).json({
-      success: false,
-      error: {
-        message: `Method ${req.method} not allowed`,
-      },
-    });
+    return res.status(405).json(ApiError.methodNotAllowed(req.method || 'unknown'));
   } catch (error) {
     console.error('Organization API error:', error);
-    return res.status(500).json({
-      success: false,
-      error: {
-        message: 'Internal server error',
-        details: error instanceof Error ? error.message : String(error),
-      },
-    });
+    return res.status(500).json(ApiError.internalServerError(error));
   }
 }
 

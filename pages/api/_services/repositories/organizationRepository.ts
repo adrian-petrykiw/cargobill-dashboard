@@ -5,7 +5,6 @@ import {
   updateOrganizationSchema,
   type Organization,
 } from '@/schemas/organization.schema';
-import { ApiError } from '@/types/api/errors';
 
 export const organizationRepository = {
   async getById(id: string): Promise<Organization> {
