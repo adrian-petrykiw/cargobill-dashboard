@@ -1,7 +1,7 @@
 // pages/api/_middleware/withAuth.ts
 import { NextApiRequest, NextApiResponse } from 'next';
-import * as supabaseService from '../_services/supabaseService';
 import * as privyService from '../_services/privyService';
+import { userRepository } from '../_services/repositories/userRepository';
 
 export function withAuthMiddleware(
   handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
@@ -20,9 +20,9 @@ export function withAuthMiddleware(
       // Verify the token using Privy
       const privyClaims = await privyService.verifyToken(authToken);
 
-      // Get user from database
+      // Get user from database using repository pattern
       const privyUser = await privyService.getUser(privyClaims.userId);
-      const dbUser = await supabaseService.getOrCreateUser(privyClaims.userId, privyUser);
+      const dbUser = await userRepository.getOrCreateUser(privyClaims.userId, privyUser);
 
       // Add user data to the request
       (req as any).user = {
