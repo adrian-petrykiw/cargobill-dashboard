@@ -2,42 +2,37 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import * as privyService from '../_services/privyService';
 import { userRepository } from '../_services/repositories/userRepository';
+import { ApiError } from '@/types/api/errors';
 
 export function withAuthMiddleware(
   handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
 ) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
-    // Get token from cookie or Authorization header
     const headerAuthToken = req.headers.authorization?.replace(/^Bearer /, '');
     const cookieAuthToken = req.cookies['privy-token'];
     const authToken = cookieAuthToken || headerAuthToken;
 
     if (!authToken) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return res.status(401).json(ApiError.unauthorized('Authentication required'));
     }
 
     try {
-      // Verify the token using Privy
       const privyClaims = await privyService.verifyToken(authToken);
+      const dbUser = await userRepository.getByAuthId(privyClaims.userId);
 
-      // Get user from database using repository pattern
-      const privyUser = await privyService.getUser(privyClaims.userId);
-      const dbUser = await userRepository.getOrCreateUser(privyClaims.userId, privyUser);
+      if (!dbUser) {
+        return res.status(401).json(ApiError.unauthorized('User not registered in system'));
+      }
 
-      // Add user data to the request
       (req as any).user = {
         id: dbUser.id,
-        privyId: privyClaims.userId,
-        email: dbUser.email,
-        walletAddress: dbUser.wallet_address,
-        // Add other user properties as needed
+        authId: privyClaims.userId,
       };
 
-      // Continue to the API route handler
       return handler(req, res);
     } catch (error) {
       console.error('API authentication error:', error);
-      return res.status(401).json({ error: 'Invalid authentication token' });
+      return res.status(401).json(ApiError.unauthorized('Invalid authentication token'));
     }
   };
 }

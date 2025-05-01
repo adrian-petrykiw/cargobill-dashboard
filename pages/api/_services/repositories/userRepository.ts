@@ -82,7 +82,7 @@ export const userRepository = {
     }
   },
 
-  async getOrCreateUser(authId: string, userData: any): Promise<User> {
+  async createUser(authId: string, userData: any): Promise<User> {
     // Check if user exists
     const existingUser = await this.getByAuthId(authId);
 

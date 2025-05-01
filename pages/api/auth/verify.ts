@@ -1,36 +1,35 @@
 // pages/api/auth/verify.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import * as privyService from '../_services/privyService';
+import { ApiError } from '@/types/api/errors';
+import { withRateLimit } from '../_middleware/rateLimiter';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Only allow GET requests
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json(ApiError.methodNotAllowed(req.method || 'unknown'));
   }
 
-  // Get token from cookie or Authorization header
   const headerAuthToken = req.headers.authorization?.replace(/^Bearer /, '');
   const cookieAuthToken = req.cookies['privy-token'];
   const authToken = cookieAuthToken || headerAuthToken;
 
   if (!authToken) {
-    return res.status(401).json({ error: 'Missing authentication token' });
+    return res.status(401).json(ApiError.unauthorized('Missing authentication token'));
   }
 
   try {
-    // Verify the token using the Privy service
     const claims = await privyService.verifyToken(authToken);
 
-    // Return user data
     return res.status(200).json({
-      authenticated: true,
-      userId: claims.userId,
-      claims,
+      success: true,
+      data: {
+        authenticated: true,
+        userId: claims.userId,
+      },
     });
   } catch (error: any) {
-    return res.status(401).json({
-      authenticated: false,
-      error: error.message,
-    });
+    return res.status(401).json(ApiError.unauthorized('Authentication verification failed'));
   }
 }
+
+export default withRateLimit(handler, 'auth');

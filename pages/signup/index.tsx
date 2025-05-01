@@ -1,16 +1,14 @@
 // @/pages/signup/index.tsx
-
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useLogin, usePrivy } from '@privy-io/react-auth';
+import { usePrivy } from '@privy-io/react-auth';
 import { PrivyClient } from '@privy-io/server-auth';
 import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ROUTES } from '@/constants/routes';
 import RootLayout from '@/components/layouts/RootLayout';
-
-// Import shadcn components
+import useAuth from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
@@ -44,9 +42,7 @@ export const getServerSideProps: GetServerSideProps = async ({ req }) => {
 
 export default function SignupPage() {
   const router = useRouter();
-  const { login } = useLogin({
-    onComplete: () => router.push(ROUTES.DASHBOARD),
-  });
+  const { login } = useAuth();
   const { ready, authenticated } = usePrivy();
 
   // Client-side authentication check

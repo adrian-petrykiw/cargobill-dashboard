@@ -36,8 +36,21 @@ export const updateUserSchema = userSchema
   .omit({
     created_at: true,
     auth_id: true,
+    wallet_address: true,
   })
   .partial()
   .required({ id: true });
 
 export type UpdateUserRequest = z.infer<typeof updateUserSchema>;
+
+export const updateProfileSchema = z.object({
+  first_name: z.string().min(1, 'First name is required'),
+  last_name: z.string().min(1, 'Last name is required'),
+  phone_number: z.string().nullable().optional(),
+  timezone: z.string().nullable().optional(),
+  primary_address: jsonSchema.nullable().optional(),
+  mailing_address: jsonSchema.nullable().optional(),
+  profile_image_url: z.string().url().nullable().optional(),
+});
+
+export type UpdateProfileRequest = z.infer<typeof updateProfileSchema>;
