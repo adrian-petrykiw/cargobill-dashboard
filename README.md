@@ -2,11 +2,11 @@
 
 Realtime cross-border logistics payments 24/7, anytime, anywhere in the world
 
-> **Note**: You can find our live dashboard here: https://github.com/adrian-petrykiw/logistics-invoicing-dashboard
 
 
+> ⚠️ **WARNING**: This repository is under active development. Features and connected APIs may change without notice. 
 
-> ⚠️ **WARNING**: This repository is under active development. Features and connected APIs may change without notice.
+Find our v0 dashboard here: https://github.com/adrian-petrykiw/logistics-invoicing-dashboard
 
 
 
