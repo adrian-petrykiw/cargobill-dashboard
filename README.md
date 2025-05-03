@@ -6,7 +6,7 @@ Realtime cross-border logistics payments 24/7, anytime, anywhere in the world
 
 > ⚠️ **WARNING**: This repository is under active development. Features and connected APIs may change without notice. 
 
-Find our live (https://cargobill.co) v0 dashboard here: https://github.com/adrian-petrykiw/logistics-invoicing-dashboard
+Find our live (https://cargobill.co) v0 dashboard repo here: https://github.com/adrian-petrykiw/logistics-invoicing-dashboard
 
 
 
