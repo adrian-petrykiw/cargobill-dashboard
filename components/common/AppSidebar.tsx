@@ -57,7 +57,8 @@ export default function AppSidebar() {
             }`}
           >
             <span
-              className={`flex-shrink-0 ${isActive(item.href) ? 'text-blue-700' : 'text-gray-400'} `}
+              className={`            pl-[0.15rem]
+flex-shrink-0 ${isActive(item.href) ? 'text-blue-700' : 'text-gray-400'} `}
             >
               {item.icon}
             </span>
