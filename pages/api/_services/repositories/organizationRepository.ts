@@ -9,6 +9,23 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/db/supabase';
 
 export const organizationRepository = {
+  // Add this new method to check if user already has an organization
+  async isUserInAnyOrganization(
+    supabase: SupabaseClient<Database>,
+    userId: string,
+  ): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .limit(1);
+
+    if (error) throw new Error(`Failed to check user organizations: ${error.message}`);
+
+    return (data || []).length > 0;
+  },
+
   // System-level operations
   async getByIdSystem(id: string): Promise<Organization> {
     const { data, error } = await supabaseAdmin
@@ -37,7 +54,8 @@ export const organizationRepository = {
     const { data, error } = await supabase
       .from('organization_members')
       .select('organization_id')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('status', 'active');
 
     if (error) throw new Error(`Failed to get user organizations: ${error.message}`);
     if (!data || data.length === 0) return [];
@@ -60,6 +78,12 @@ export const organizationRepository = {
     userId: string,
   ): Promise<Organization> {
     try {
+      // Check if user is already in an organization
+      const isAlreadyInOrg = await this.isUserInAnyOrganization(supabase, userId);
+      if (isAlreadyInOrg) {
+        throw new Error('User is already a member of an organization');
+      }
+
       // Parse and validate with Zod
       const validData = createOrganizationSchema.parse({
         ...organizationData,
@@ -96,6 +120,7 @@ export const organizationRepository = {
     }
   },
 
+  // Rest of the repository methods remain unchanged
   async update(
     supabase: SupabaseClient<Database>,
     id: string,
@@ -139,6 +164,12 @@ export const organizationRepository = {
     userId: string,
     role: string,
   ): Promise<void> {
+    // Check if user is already in an organization
+    const isAlreadyInOrg = await this.isUserInAnyOrganization(supabase, userId);
+    if (isAlreadyInOrg) {
+      throw new Error('User is already a member of an organization');
+    }
+
     const { error } = await supabase.from('organization_members').insert({
       organization_id: organizationId,
       user_id: userId,
@@ -181,6 +212,18 @@ export const organizationRepository = {
   // System-level operations needed during signup/bootstrap
   async createSystem(organizationData: any, userId: string): Promise<Organization> {
     try {
+      // Check if user is already in an organization
+      const { data: existingMemberships } = await supabaseAdmin
+        .from('organization_members')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .limit(1);
+
+      if (existingMemberships && existingMemberships.length > 0) {
+        throw new Error('User is already a member of an organization');
+      }
+
       // Parse and validate with Zod
       const validData = createOrganizationSchema.parse({
         ...organizationData,

@@ -1,5 +1,4 @@
-// components/common/AppSidebar.tsx
-import { Fragment, useEffect } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ROUTES } from '@/constants/routes';
@@ -15,6 +14,8 @@ import { useSidebarStore } from '@/stores/preferences/sidebarStore';
 export default function AppSidebar() {
   const router = useRouter();
   const { mode, setMode } = useSidebarStore();
+  // Add state to track if sidebar is actually being hovered
+  const [isHovering, setIsHovering] = useState(false);
 
   // Prefetch all navigation routes for instant navigation
   useEffect(() => {
@@ -41,8 +42,11 @@ export default function AppSidebar() {
   return (
     <aside
       className={`h-full bg-white border-r border-gray-200 transition-all duration-300 ease-in-out flex flex-col ${
-        isCollapsed ? 'w-16' : 'w-52'
-      } ${shouldExpandOnHover ? 'group hover:w-52' : ''}`}
+        isCollapsed && shouldExpandOnHover && isHovering ? 'w-52' : isCollapsed ? 'w-16' : 'w-52'
+      }`}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      style={{ overflow: 'hidden' }} // Ensure no overflow outside of sidebar
     >
       <div className="py-4 flex-1">
         {navigationItems.map((item) => (
@@ -57,14 +61,13 @@ export default function AppSidebar() {
             }`}
           >
             <span
-              className={`            pl-[0.15rem]
-flex-shrink-0 ${isActive(item.href) ? 'text-blue-700' : 'text-gray-400'} `}
+              className={`pl-[0.15rem] flex-shrink-0 ${isActive(item.href) ? 'text-blue-700' : 'text-gray-400'}`}
             >
               {item.icon}
             </span>
             <span
               className={`whitespace-nowrap transition-opacity duration-300 ${
-                isCollapsed ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
+                isCollapsed && !isHovering ? 'opacity-0' : 'opacity-100'
               }`}
             >
               {item.name}
@@ -77,10 +80,10 @@ flex-shrink-0 ${isActive(item.href) ? 'text-blue-700' : 'text-gray-400'} `}
       <div className="mt-auto">
         <Menu as="div" className="relative">
           <Menu.Button
-            className="flex items-center gap-3 rounded-md p-2 text-sm font-medium transition-colors mx-2 my-1 text-gray-400 hover:bg-accent hover:text-gray-400 group"
+            className="flex items-center gap-3 rounded-md p-2 text-sm font-medium transition-colors mx-2 my-1 text-gray-400 hover:bg-accent hover:text-gray-400"
             aria-label="Sidebar control"
           >
-            <span className={`flex-shrink-0 ${isCollapsed ? 'mx-auto' : ''} `}>
+            <span className={`flex-shrink-0 ${isCollapsed && !isHovering ? 'mx-auto' : ''}`}>
               <MdViewSidebar size={18} />
             </span>
           </Menu.Button>

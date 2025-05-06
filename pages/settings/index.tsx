@@ -37,7 +37,7 @@ export default function Settings() {
         <h1 className="text-xl font-semibold">Settings</h1>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <div className="border-b border-gray-200">
+          <div className="border-b border-gray-200 mb-4">
             <div className="flex space-x-8">
               <button
                 onClick={() => handleTabChange('profile')}
