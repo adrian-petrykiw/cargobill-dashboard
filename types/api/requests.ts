@@ -21,6 +21,17 @@ import type {
   OrganizationMember,
   CreateOrganizationMemberRequest as SchemaCreateOrgMemberRequest,
 } from '@/schemas/organizationMember.schema';
+import { NextApiRequest } from 'next';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { Database } from '../db/supabase';
+
+export interface AuthenticatedRequest extends NextApiRequest {
+  user: {
+    id: string;
+    authId: string;
+  };
+  supabase: SupabaseClient<Database>;
+}
 
 // Organization Requests
 export interface GetOrganizationRequest {

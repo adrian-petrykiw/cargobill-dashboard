@@ -1,8 +1,9 @@
-// lib/middleware/rateLimiter.ts
+// pages/api/_middleware/rateLimiter.ts
 import { kv } from '@vercel/kv';
 import { Ratelimit } from '@upstash/ratelimit';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import logger from '@/pages/api/_config/logger';
+import { AuthenticatedRequest } from '@/types/api/requests';
 
 export type RateLimitType = 'standard' | 'auth' | 'payment' | 'public';
 
@@ -72,11 +73,16 @@ function getIdentifier(req: NextApiRequest): string {
   return `ip_${Array.isArray(ip) ? ip[0] : ip}`;
 }
 
-export function withRateLimit(
-  handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
+type ApiHandler<T extends NextApiRequest = NextApiRequest> = (
+  req: T,
+  res: NextApiResponse,
+) => Promise<void>;
+
+export function withRateLimit<T extends NextApiRequest = NextApiRequest>(
+  handler: ApiHandler<T>,
   type: RateLimitType = 'standard',
 ) {
-  return async function rateProtectedHandler(req: NextApiRequest, res: NextApiResponse) {
+  return async function rateProtectedHandler(req: T, res: NextApiResponse) {
     const identifier = getIdentifier(req);
     const rateLimiter = rateLimiters[type];
 

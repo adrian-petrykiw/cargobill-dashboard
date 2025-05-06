@@ -1,11 +1,13 @@
 // pages/api/_middleware/withAuth.ts
 import { NextApiRequest, NextApiResponse } from 'next';
+import { createSupabaseClient } from '../_config/supabase';
 import * as privyService from '../_services/privyService';
 import { userRepository } from '../_services/repositories/userRepository';
 import { ApiError } from '@/types/api/errors';
+import { AuthenticatedRequest } from '@/types/api/requests';
 
 export function withAuthMiddleware(
-  handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
+  handler: (req: AuthenticatedRequest, res: NextApiResponse) => Promise<void>,
 ) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     const headerAuthToken = req.headers.authorization?.replace(/^Bearer /, '');
@@ -18,18 +20,23 @@ export function withAuthMiddleware(
 
     try {
       const privyClaims = await privyService.verifyToken(authToken);
-      const dbUser = await userRepository.getByAuthId(privyClaims.userId);
+      const dbUser = await userRepository.getByAuthIdSystem(privyClaims.userId);
 
       if (!dbUser) {
         return res.status(401).json(ApiError.unauthorized('User not registered in system'));
       }
 
-      (req as any).user = {
+      // Attach user to request
+      const authenticatedReq = req as AuthenticatedRequest;
+      authenticatedReq.user = {
         id: dbUser.id,
         authId: privyClaims.userId,
       };
 
-      return handler(req, res);
+      // Create Supabase client with user context
+      authenticatedReq.supabase = createSupabaseClient(authenticatedReq);
+
+      return handler(authenticatedReq, res);
     } catch (error) {
       console.error('API authentication error:', error);
       return res.status(401).json(ApiError.unauthorized('Invalid authentication token'));

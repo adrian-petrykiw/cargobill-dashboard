@@ -554,7 +554,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_manage_transactions: {
+        Args: { org_id: string }
+        Returns: boolean
+      }
+      current_user_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      is_org_member: {
+        Args: { org_id: string; roles?: string[] }
+        Returns: boolean
+      }
+      set_claim: {
+        Args: { claim: string; value: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -4,7 +4,6 @@ import Image from 'next/image';
 import { usePrivy } from '@privy-io/react-auth';
 import { Menu, Transition } from '@headlessui/react';
 import { ROUTES } from '@/constants/routes';
-import useAuth from '@/features/auth/hooks/useAuth';
 import { useCurrency } from '@/hooks/useCurrency';
 import { currencyOptions } from '@/constants/currencyData';
 import NotificationsPopover from '../providers/NotificationsPopover';
@@ -21,6 +20,7 @@ import {
 // Import icons from react-icons
 import { MdSettings, MdOutlineLogout } from 'react-icons/md';
 import { IoMdHelpCircle } from 'react-icons/io';
+import useAuth from '@/hooks/useAuth';
 
 function classNames(...classes: (string | boolean)[]) {
   return classes.filter(Boolean).join(' ');

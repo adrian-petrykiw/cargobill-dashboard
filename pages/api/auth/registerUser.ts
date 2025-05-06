@@ -5,6 +5,7 @@ import { userRepository } from '../_services/repositories/userRepository';
 import * as privyService from '../_services/privyService';
 import { ApiError } from '@/types/api/errors';
 import { createUserSchema } from '@/schemas/user.schema';
+import { createSupabaseClient } from '../_config/supabase';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -50,14 +51,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     // Check if user already exists
-    const existingUser = await userRepository.getByAuthId(userData.auth_id);
-    
+    const existingUser = await userRepository.getByAuthIdSystem(userData.auth_id);
+
     let user;
     if (existingUser) {
+      // Create authenticated context for the update
+      const supabase = createSupabaseClient();
+      supabase.rpc('set_claim', {
+        claim: 'user_id',
+        value: existingUser.id,
+      });
+
       // Update existing user with any new information
-      user = await userRepository.update(existingUser.id, userData);
+      user = await userRepository.update(supabase, existingUser.id, userData);
     } else {
-      // Create new user
+      // Create new user (uses admin privileges)
       user = await userRepository.create(userData);
     }
 

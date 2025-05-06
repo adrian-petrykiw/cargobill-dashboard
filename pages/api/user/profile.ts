@@ -1,18 +1,17 @@
 // pages/api/users/profile.ts
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiResponse } from 'next';
 import { withAuthMiddleware } from '../_middleware/withAuth';
 import { withRateLimit } from '../_middleware/rateLimiter';
 import { userRepository } from '../_services/repositories/userRepository';
 import { updateProfileSchema } from '@/schemas/user.schema';
 import { ApiError } from '@/types/api/errors';
+import { AuthenticatedRequest } from '@/types/api/requests';
 
-async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { user } = req as any; // From middleware
-
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   try {
     // GET: Retrieve current user profile
     if (req.method === 'GET') {
-      const profile = await userRepository.getById(user.id);
+      const profile = await userRepository.getById(req.supabase, req.user.id);
       return res.status(200).json({
         success: true,
         data: profile,
@@ -22,7 +21,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // PUT: Update user profile
     if (req.method === 'PUT') {
       try {
-        // Validate with Zod
         const result = updateProfileSchema.safeParse(req.body);
 
         if (!result.success) {
@@ -36,7 +34,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           });
         }
 
-        const updatedProfile = await userRepository.update(user.id, result.data);
+        const updatedProfile = await userRepository.update(req.supabase, req.user.id, result.data);
 
         return res.status(200).json({
           success: true,
@@ -48,7 +46,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     }
 
-    // Method not allowed
     return res.status(405).json(ApiError.methodNotAllowed(req.method || 'unknown'));
   } catch (error) {
     console.error('User profile API error:', error);
@@ -56,4 +53,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuthMiddleware(withRateLimit(handler, 'standard'));
+export default withRateLimit((req, res) => withAuthMiddleware(handler)(req, res), 'standard');

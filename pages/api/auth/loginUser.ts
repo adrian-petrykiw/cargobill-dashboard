@@ -5,6 +5,7 @@ import { userRepository } from '../_services/repositories/userRepository';
 import * as privyService from '../_services/privyService';
 import { ApiError } from '@/types/api/errors';
 import { z } from 'zod';
+import { createSupabaseClient } from '../_config/supabase';
 
 // Login schema that requires only necessary fields
 const loginSchema = z.object({
@@ -59,7 +60,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     // Check if user exists in our database
-    const existingUser = await userRepository.getByAuthId(loginData.auth_id);
+    const existingUser = await userRepository.getByAuthIdSystem(loginData.auth_id);
 
     if (!existingUser) {
       return res.status(404).json({
@@ -71,8 +72,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
+    // Create authenticated context for update
+    const supabase = createSupabaseClient();
+    supabase.rpc('set_claim', {
+      claim: 'user_id',
+      value: existingUser.id,
+    });
+
     // Update last login time
-    const updatedUser = await userRepository.update(existingUser.id, {
+    const updatedUser = await userRepository.update(supabase, existingUser.id, {
       last_sign_in: new Date().toISOString(),
     });
 

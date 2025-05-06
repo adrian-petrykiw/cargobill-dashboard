@@ -5,9 +5,12 @@ import {
   updateTransactionSchema,
   type Transaction,
 } from '@/schemas/transaction.schema';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { Database } from '@/types/db/supabase';
 
 export const transactionRepository = {
-  async getById(id: string): Promise<Transaction> {
+  // System-level operations
+  async getByIdSystem(id: string): Promise<Transaction> {
     const { data, error } = await supabaseAdmin
       .from('transactions')
       .select('*')
@@ -20,8 +23,21 @@ export const transactionRepository = {
     return data;
   },
 
-  async getByOrganizationId(organizationId: string): Promise<Transaction[]> {
-    const { data, error } = await supabaseAdmin
+  // RLS-respecting operations
+  async getById(supabase: SupabaseClient<Database>, id: string): Promise<Transaction> {
+    const { data, error } = await supabase.from('transactions').select('*').eq('id', id).single();
+
+    if (error) throw new Error(`Failed to get transaction: ${error.message}`);
+    if (!data) throw new Error(`Transaction not found: ${id}`);
+
+    return data;
+  },
+
+  async getByOrganizationId(
+    supabase: SupabaseClient<Database>,
+    organizationId: string,
+  ): Promise<Transaction[]> {
+    const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .or(
@@ -34,8 +50,11 @@ export const transactionRepository = {
     return data || [];
   },
 
-  async getSentByOrganizationId(organizationId: string): Promise<Transaction[]> {
-    const { data, error } = await supabaseAdmin
+  async getSentByOrganizationId(
+    supabase: SupabaseClient<Database>,
+    organizationId: string,
+  ): Promise<Transaction[]> {
+    const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .eq('sender_organization_id', organizationId)
@@ -46,8 +65,11 @@ export const transactionRepository = {
     return data || [];
   },
 
-  async getReceivedByOrganizationId(organizationId: string): Promise<Transaction[]> {
-    const { data, error } = await supabaseAdmin
+  async getReceivedByOrganizationId(
+    supabase: SupabaseClient<Database>,
+    organizationId: string,
+  ): Promise<Transaction[]> {
+    const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .eq('recipient_organization_id', organizationId)
@@ -58,7 +80,97 @@ export const transactionRepository = {
     return data || [];
   },
 
-  async create(transactionData: any, userId: string): Promise<Transaction> {
+  async create(
+    supabase: SupabaseClient<Database>,
+    transactionData: any,
+    userId: string,
+  ): Promise<Transaction> {
+    try {
+      // Validate with Zod
+      const validData = createTransactionSchema.parse({
+        ...transactionData,
+        created_by: userId,
+      });
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert(validData)
+        .select()
+        .single();
+
+      if (error) throw new Error(`Failed to create transaction: ${error.message}`);
+      if (!data) throw new Error('Failed to retrieve created transaction');
+
+      return data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Failed to create transaction: ${String(error)}`);
+    }
+  },
+
+  async update(
+    supabase: SupabaseClient<Database>,
+    id: string,
+    transactionData: any,
+    userId: string,
+  ): Promise<Transaction> {
+    try {
+      // Validate with Zod
+      const validData = updateTransactionSchema.parse({
+        id,
+        ...transactionData,
+        updated_by: userId,
+        updated_at: new Date().toISOString(),
+      });
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .update(validData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw new Error(`Failed to update transaction: ${error.message}`);
+      if (!data) throw new Error(`Transaction not found: ${id}`);
+
+      return data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Failed to update transaction: ${String(error)}`);
+    }
+  },
+
+  async updateStatus(
+    supabase: SupabaseClient<Database>,
+    id: string,
+    status: string,
+    userId: string,
+  ): Promise<Transaction> {
+    return this.update(supabase, id, { status }, userId);
+  },
+
+  async completeTransaction(
+    supabase: SupabaseClient<Database>,
+    id: string,
+    userId: string,
+  ): Promise<Transaction> {
+    return this.update(
+      supabase,
+      id,
+      {
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      },
+      userId,
+    );
+  },
+
+  // System operations (for integration with blockchain systems, etc.)
+  async createSystem(transactionData: any, userId: string): Promise<Transaction> {
     try {
       // Validate with Zod
       const validData = createTransactionSchema.parse({
@@ -84,7 +196,7 @@ export const transactionRepository = {
     }
   },
 
-  async update(id: string, transactionData: any, userId: string): Promise<Transaction> {
+  async updateSystem(id: string, transactionData: any, userId: string): Promise<Transaction> {
     try {
       // Validate with Zod
       const validData = updateTransactionSchema.parse({
@@ -111,20 +223,5 @@ export const transactionRepository = {
       }
       throw new Error(`Failed to update transaction: ${String(error)}`);
     }
-  },
-
-  async updateStatus(id: string, status: string, userId: string): Promise<Transaction> {
-    return this.update(id, { status }, userId);
-  },
-
-  async completeTransaction(id: string, userId: string): Promise<Transaction> {
-    return this.update(
-      id,
-      {
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      },
-      userId,
-    );
   },
 };
