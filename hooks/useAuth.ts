@@ -11,11 +11,11 @@ export default function useAuth() {
   const { logout: privyLogout, authenticated, ready, user: privyUser, getAccessToken } = usePrivy();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const setUser = useUserStore((state: any) => state.setUser);
-  const clearUser = useUserStore((state: any) => state.clearUser);
+  const setUser = useUserStore((state) => state.setUser);
+  const clearUser = useUserStore((state) => state.clearUser);
 
   const { login } = useLogin({
-    onComplete: async (params: { user: any; isNewUser: any }) => {
+    onComplete: async (params) => {
       try {
         const { user, isNewUser } = params;
 
@@ -38,16 +38,20 @@ export default function useAuth() {
             last_name: lastName,
             wallet_address: user.wallet?.address || '',
           });
+
+          setUser(userData);
         } else {
           userData = await userApi.loginUser({
             auth_id: user.id,
             email: user.email?.address || user.google?.email,
             wallet_address: user.wallet?.address,
           });
+
+          setUser(userData);
         }
 
-        setUser(userData);
         queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
 
         router.push(ROUTES.DASHBOARD);
       } catch (error) {

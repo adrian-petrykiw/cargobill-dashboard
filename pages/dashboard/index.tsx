@@ -1,6 +1,7 @@
 // pages/dashboard/index.tsx
+import { useState, useEffect } from 'react';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -12,8 +13,56 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import OnboardingChecklist from '@/components/onboarding/OnboardingChecklist';
+import { useUserStore } from '@/stores/userStore';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { organizationApi } from '@/services/api/organizationApi';
+import { OrganizationSetupModal } from '@/components/onboarding/OnboardingSetupModal';
 
 export default function Dashboard() {
+  const user = useUserStore((state) => state.user);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Check if user has an organization
+  const { data: organizations, isLoading: isLoadingOrgs } = useQuery({
+    queryKey: ['userOrganizations'],
+    queryFn: async () => await organizationApi.getOrganizations(),
+    enabled: !!user?.id,
+  });
+
+  // Determine if we should show onboarding
+  useEffect(() => {
+    if (!isLoadingOrgs && user) {
+      // If user has no organizations, show onboarding
+      if (!organizations || organizations.length === 0) {
+        setShowOnboarding(true);
+        return;
+      }
+
+      // Get primary organization
+      const primaryOrg = organizations[0];
+
+      // Check for basic required fields
+      const hasBasicInfo =
+        !!primaryOrg.name && !!primaryOrg.country && !!primaryOrg.primary_address;
+
+      // Check for operational wallet
+      const hasOperationalWallet = !!primaryOrg.operational_wallet;
+
+      // Show onboarding if basic info or operational wallet is missing
+      if (!hasBasicInfo || !hasOperationalWallet) {
+        setShowOnboarding(true);
+      }
+    }
+  }, [user, organizations, isLoadingOrgs]);
+
+  // Handle onboarding modal close
+  const handleCloseOnboarding = () => {
+    setShowOnboarding(false);
+    // Force refresh organizations data to check if onboarding is still needed
+    queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
+  };
+
   return (
     <ProtectedLayout title="Dashboard · CargoBill">
       <div className="space-y-5">
@@ -230,6 +279,13 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Onboarding Modal */}
+      <OrganizationSetupModal
+        isOpen={showOnboarding}
+        onClose={handleCloseOnboarding}
+        userEmail={user?.email || ''}
+      />
     </ProtectedLayout>
   );
 }

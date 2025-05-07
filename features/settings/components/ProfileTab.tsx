@@ -107,7 +107,7 @@ export default function ProfileTab() {
   if (isLoading) {
     return (
       <div className="flex justify-center p-8">
-        <Spinner size="lg" />
+        <Spinner size="sm" />
       </div>
     );
   }
