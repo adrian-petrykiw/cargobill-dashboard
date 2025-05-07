@@ -1,5 +1,5 @@
 // pages/api/_middleware/rateLimiter.ts
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import logger from '@/pages/api/_config/logger';
@@ -14,7 +14,7 @@ const rateLimitConfigs: Record<RateLimitType, { limit: number; windowSeconds: nu
   public: { limit: 120, windowSeconds: 60 }, // 120 requests per minute for public endpoints
 };
 
-// Mock rate limiter for development when KV is not available
+// Mock rate limiter for development when Redis is not available
 const createMockRateLimiter = (type: RateLimitType) => ({
   limit: async (identifier: string) => {
     console.log(`[DEV MODE] Mock rate limit check for ${type}: ${identifier}`);
@@ -27,8 +27,30 @@ const createMockRateLimiter = (type: RateLimitType) => ({
   },
 });
 
-// Check if KV environment variables are available
-const isKvAvailable = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+// Initialize Redis client
+// Prioritize standard Upstash environment variables, fall back to the ones provided by Vercel
+const getRedisClient = () => {
+  // Check for Upstash standard environment variables first
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+  }
+
+  // Fall back to Vercel-provided environment variables
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    });
+  }
+
+  return null;
+};
+
+const redis = getRedisClient();
+const isRedisAvailable = !!redis;
 
 // Initialize rate limiters
 const rateLimiters: Record<RateLimitType, any> = {
@@ -38,10 +60,10 @@ const rateLimiters: Record<RateLimitType, any> = {
   public: undefined,
 };
 
-if (isKvAvailable) {
-  // Production rate limiters using Vercel KV
+if (isRedisAvailable) {
+  // Production rate limiters using Upstash Redis
   rateLimiters.standard = new Ratelimit({
-    redis: kv,
+    redis,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.standard.limit,
       `${rateLimitConfigs.standard.windowSeconds} s`,
@@ -51,7 +73,7 @@ if (isKvAvailable) {
   });
 
   rateLimiters.auth = new Ratelimit({
-    redis: kv,
+    redis,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.auth.limit,
       `${rateLimitConfigs.auth.windowSeconds} s`,
@@ -61,7 +83,7 @@ if (isKvAvailable) {
   });
 
   rateLimiters.payment = new Ratelimit({
-    redis: kv,
+    redis,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.payment.limit,
       `${rateLimitConfigs.payment.windowSeconds} s`,
@@ -71,7 +93,7 @@ if (isKvAvailable) {
   });
 
   rateLimiters.public = new Ratelimit({
-    redis: kv,
+    redis,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.public.limit,
       `${rateLimitConfigs.public.windowSeconds} s`,
@@ -81,7 +103,7 @@ if (isKvAvailable) {
   });
 } else {
   // Development fallback using mock rate limiters
-  console.warn('[DEV MODE] Using mock rate limiters - KV environment variables not found');
+  logger.warn('[DEV MODE] Using mock rate limiters - Redis connection not available');
   rateLimiters.standard = createMockRateLimiter('standard');
   rateLimiters.auth = createMockRateLimiter('auth');
   rateLimiters.payment = createMockRateLimiter('payment');

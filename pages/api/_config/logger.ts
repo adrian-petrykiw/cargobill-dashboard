@@ -1,4 +1,4 @@
-// lib/logger.ts
+// pages/api/_config/logger.ts
 import pino from 'pino';
 import path from 'path';
 
