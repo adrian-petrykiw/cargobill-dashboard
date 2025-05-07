@@ -70,3 +70,13 @@ export const updateOrganizationSchema = organizationSchema
   .required({ id: true });
 
 export type UpdateOrganizationRequest = z.infer<typeof updateOrganizationSchema>;
+
+export const onboardingOrganizationSchema = z.object({
+  business_name: z.string().min(1, 'Business name is required'),
+  primary_address: z.string().min(1, 'Business address is required'),
+  country: z.string().min(1, 'Country is required'),
+  business_email: z.string().email('Valid business email required'),
+  primary_phone: z.string().optional(),
+});
+
+export type OnboardingOrganizationRequest = z.infer<typeof onboardingOrganizationSchema>;

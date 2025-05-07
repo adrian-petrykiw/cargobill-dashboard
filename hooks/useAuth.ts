@@ -15,7 +15,7 @@ export default function useAuth() {
   const clearUser = useUserStore((state: any) => state.clearUser);
 
   const { login } = useLogin({
-    onComplete: async (params) => {
+    onComplete: async (params: { user: any; isNewUser: any }) => {
       try {
         const { user, isNewUser } = params;
 

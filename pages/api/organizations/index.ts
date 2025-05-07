@@ -80,4 +80,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 }
 
-export default withRateLimit((req, res) => withAuthMiddleware(handler)(req, res), 'standard');
+export default withRateLimit(
+  (req, res) => withAuthMiddleware(handler, { validateWallet: true })(req, res),
+  'standard',
+);

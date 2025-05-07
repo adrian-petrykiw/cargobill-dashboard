@@ -1,4 +1,4 @@
-// pages/api/_services/repositories/organizationRepository.ts
+// pages/api/_services/repositories/organizationRepository.ts (unchanged from your provided version)
 import { supabaseAdmin } from '../../_config/supabase';
 import {
   createOrganizationSchema,
@@ -120,7 +120,6 @@ export const organizationRepository = {
     }
   },
 
-  // Rest of the repository methods remain unchanged
   async update(
     supabase: SupabaseClient<Database>,
     id: string,
