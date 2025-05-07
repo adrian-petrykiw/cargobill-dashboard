@@ -30,15 +30,6 @@ const createMockRateLimiter = (type: RateLimitType) => ({
 // Initialize Redis client
 // Prioritize standard Upstash environment variables, fall back to the ones provided by Vercel
 const getRedisClient = () => {
-  // Check for Upstash standard environment variables first
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    return new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-  }
-
-  // Fall back to Vercel-provided environment variables
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
     return new Redis({
       url: process.env.KV_REST_API_URL,
