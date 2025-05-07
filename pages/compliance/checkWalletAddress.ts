@@ -1,7 +1,6 @@
 // pages/api/compliance/checkWalletAddress.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { verifyToken } from '../api/_services/privyService';
-import { supabaseAdmin } from '../api/_services/supabaseService';
 import circleComplianceService from '../api/_services/circleComplianceService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -26,14 +25,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const screeningResult = await circleComplianceService.screenWalletAddress(walletAddress, chain);
 
-    await supabaseAdmin.from('compliance_wallet_screenings').insert({
-      user_id: userId,
-      wallet_address: walletAddress,
-      chain,
-      result: screeningResult.result,
-      decision: screeningResult.decision,
-      timestamp: new Date(),
-    });
+    // await supabaseAdmin.from('compliance_wallet_screenings').insert({
+    //   user_id: userId,
+    //   wallet_address: walletAddress,
+    //   chain,
+    //   result: screeningResult.result,
+    //   decision: screeningResult.decision,
+    //   timestamp: new Date(),
+    // });
 
     return res.status(200).json({
       walletAddress,

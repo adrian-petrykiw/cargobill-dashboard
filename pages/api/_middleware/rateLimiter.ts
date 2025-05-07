@@ -14,9 +14,33 @@ const rateLimitConfigs: Record<RateLimitType, { limit: number; windowSeconds: nu
   public: { limit: 120, windowSeconds: 60 }, // 120 requests per minute for public endpoints
 };
 
-// Initialize with Vercel KV
-const rateLimiters: Record<RateLimitType, Ratelimit> = {
-  standard: new Ratelimit({
+// Mock rate limiter for development when KV is not available
+const createMockRateLimiter = (type: RateLimitType) => ({
+  limit: async (identifier: string) => {
+    console.log(`[DEV MODE] Mock rate limit check for ${type}: ${identifier}`);
+    return {
+      success: true,
+      limit: rateLimitConfigs[type].limit,
+      reset: Date.now() + rateLimitConfigs[type].windowSeconds * 1000,
+      remaining: rateLimitConfigs[type].limit - 1,
+    };
+  },
+});
+
+// Check if KV environment variables are available
+const isKvAvailable = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+
+// Initialize rate limiters
+const rateLimiters: Record<RateLimitType, any> = {
+  standard: undefined,
+  auth: undefined,
+  payment: undefined,
+  public: undefined,
+};
+
+if (isKvAvailable) {
+  // Production rate limiters using Vercel KV
+  rateLimiters.standard = new Ratelimit({
     redis: kv,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.standard.limit,
@@ -24,8 +48,9 @@ const rateLimiters: Record<RateLimitType, Ratelimit> = {
     ),
     analytics: true,
     prefix: 'ratelimit:standard',
-  }),
-  auth: new Ratelimit({
+  });
+
+  rateLimiters.auth = new Ratelimit({
     redis: kv,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.auth.limit,
@@ -33,8 +58,9 @@ const rateLimiters: Record<RateLimitType, Ratelimit> = {
     ),
     analytics: true,
     prefix: 'ratelimit:auth',
-  }),
-  payment: new Ratelimit({
+  });
+
+  rateLimiters.payment = new Ratelimit({
     redis: kv,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.payment.limit,
@@ -42,8 +68,9 @@ const rateLimiters: Record<RateLimitType, Ratelimit> = {
     ),
     analytics: true,
     prefix: 'ratelimit:payment',
-  }),
-  public: new Ratelimit({
+  });
+
+  rateLimiters.public = new Ratelimit({
     redis: kv,
     limiter: Ratelimit.slidingWindow(
       rateLimitConfigs.public.limit,
@@ -51,8 +78,15 @@ const rateLimiters: Record<RateLimitType, Ratelimit> = {
     ),
     analytics: true,
     prefix: 'ratelimit:public',
-  }),
-};
+  });
+} else {
+  // Development fallback using mock rate limiters
+  console.warn('[DEV MODE] Using mock rate limiters - KV environment variables not found');
+  rateLimiters.standard = createMockRateLimiter('standard');
+  rateLimiters.auth = createMockRateLimiter('auth');
+  rateLimiters.payment = createMockRateLimiter('payment');
+  rateLimiters.public = createMockRateLimiter('public');
+}
 
 function getIdentifier(req: NextApiRequest): string {
   // For authenticated routes, use user ID if available

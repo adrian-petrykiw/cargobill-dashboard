@@ -10,6 +10,7 @@ interface UserState {
   error: Error | null;
 
   // Actions
+  setUser: (user: User | null) => void;
   fetchUser: () => Promise<void>;
   updateUser: (userData: Partial<User>) => Promise<void>;
   clearUser: () => void;
@@ -21,6 +22,8 @@ export const useUserStore = create<UserState>()(
       user: null,
       isLoading: false,
       error: null,
+
+      setUser: (user) => set({ user }),
 
       fetchUser: async () => {
         try {
