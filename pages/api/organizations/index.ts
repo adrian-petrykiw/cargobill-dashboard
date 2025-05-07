@@ -11,7 +11,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   try {
     // GET: Retrieve organizations
     if (req.method === 'GET') {
-      const organizations = await organizationRepository.getByUserId(req.supabase, req.user.id);
+      const organizations = await organizationRepository.getByUserId(req.user.id);
       return res.status(200).json({
         success: true,
         data: organizations,
@@ -21,10 +21,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // POST: Create organization
     if (req.method === 'POST') {
       try {
-        const isAlreadyInOrg = await organizationRepository.isUserInAnyOrganization(
-          req.supabase,
-          req.user.id,
-        );
+        const isAlreadyInOrg = await organizationRepository.isUserInAnyOrganization(req.user.id);
         if (isAlreadyInOrg) {
           return res.status(409).json({
             success: false,
@@ -49,7 +46,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           });
         }
 
-        const newOrg = await organizationRepository.create(req.supabase, result.data, req.user.id);
+        const newOrg = await organizationRepository.create(result.data, req.user.id);
 
         return res.status(201).json({
           success: true,

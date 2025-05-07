@@ -21,13 +21,9 @@ export const verificationCodeRepository = {
    * @param purpose - The purpose of the verification code
    * @returns The verification code object if found and valid, null otherwise
    */
-  async getByCode(
-    supabase: SupabaseClient<Database>,
-    code: string,
-    purpose: string,
-  ): Promise<VerificationCode | null> {
+  async getByCode(code: string, purpose: string): Promise<VerificationCode | null> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('verification_codes')
         .select('*')
         .eq('code', code)
@@ -69,7 +65,6 @@ export const verificationCodeRepository = {
    * @returns The created verification code
    */
   async create(
-    supabase: SupabaseClient<Database>,
     purpose: string,
     expiresInMinutes: number = 30,
     metadata: Record<string, any> | null = null,
@@ -102,7 +97,7 @@ export const verificationCodeRepository = {
       const validData = createVerificationCodeSchema.parse(verificationData);
 
       // Insert record with transaction pattern
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('verification_codes')
         .insert(validData)
         .select()
@@ -202,13 +197,12 @@ export const verificationCodeRepository = {
    * @returns Object with validation result and code data if valid
    */
   async validateCode(
-    supabase: SupabaseClient<Database>,
     code: string,
     purpose: string,
   ): Promise<{ valid: boolean; data?: VerificationCode }> {
     try {
       // Fetch valid codes for this purpose
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('verification_codes')
         .select('*')
         .eq('purpose', purpose)
@@ -236,7 +230,7 @@ export const verificationCodeRepository = {
       }
 
       // Mark code as used
-      await this.markAsUsed(supabase, matchingCode.id);
+      await this.markAsUsed(supabaseAdmin, matchingCode.id);
 
       logger.info({
         message: 'Verification code validated successfully',

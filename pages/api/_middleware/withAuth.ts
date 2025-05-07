@@ -74,12 +74,13 @@ export function withAuthMiddleware(
       // Attach user to request
       const authenticatedReq = req as AuthenticatedRequest;
       authenticatedReq.user = {
-        id: dbUser.id,
-        authId: privyClaims.userId,
+        id: String(dbUser.id), // Force string conversion
+        authId: String(privyClaims.userId), // Force string conversion
       };
 
-      // Create Supabase client with user context
-      authenticatedReq.supabase = createSupabaseClient(authenticatedReq);
+      authenticatedReq.headers = req.headers;
+
+      // authenticatedReq.supabase = createSupabaseClient(authenticatedReq);
 
       return handler(authenticatedReq, res);
     } catch (error) {

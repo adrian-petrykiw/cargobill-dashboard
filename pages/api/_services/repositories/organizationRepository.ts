@@ -1,4 +1,4 @@
-// pages/api/_services/repositories/organizationRepository.ts (unchanged from your provided version)
+// pages/api/_services/repositories/organizationRepository.ts
 import { supabaseAdmin } from '../../_config/supabase';
 import {
   createOrganizationSchema,
@@ -9,12 +9,9 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/db/supabase';
 
 export const organizationRepository = {
-  // Add this new method to check if user already has an organization
-  async isUserInAnyOrganization(
-    supabase: SupabaseClient<Database>,
-    userId: string,
-  ): Promise<boolean> {
-    const { data, error } = await supabase
+  // API operations (uses admin client for backend security)
+  async isUserInAnyOrganization(userId: string): Promise<boolean> {
+    const { data, error } = await supabaseAdmin
       .from('organization_members')
       .select('id')
       .eq('user_id', userId)
@@ -26,7 +23,7 @@ export const organizationRepository = {
     return (data || []).length > 0;
   },
 
-  // System-level operations
+  // System-level operations (unchanged)
   async getByIdSystem(id: string): Promise<Organization> {
     const { data, error } = await supabaseAdmin
       .from('organizations')
@@ -40,9 +37,13 @@ export const organizationRepository = {
     return data;
   },
 
-  // RLS-respecting operations
-  async getById(supabase: SupabaseClient<Database>, id: string): Promise<Organization> {
-    const { data, error } = await supabase.from('organizations').select('*').eq('id', id).single();
+  // API operations (now uses admin client)
+  async getById(id: string): Promise<Organization> {
+    const { data, error } = await supabaseAdmin
+      .from('organizations')
+      .select('*')
+      .eq('id', id)
+      .single();
 
     if (error) throw new Error(`Failed to get organization: ${error.message}`);
     if (!data) throw new Error(`Organization not found: ${id}`);
@@ -50,8 +51,8 @@ export const organizationRepository = {
     return data;
   },
 
-  async getByUserId(supabase: SupabaseClient<Database>, userId: string): Promise<Organization[]> {
-    const { data, error } = await supabase
+  async getByUserId(userId: string): Promise<Organization[]> {
+    const { data, error } = await supabaseAdmin
       .from('organization_members')
       .select('organization_id')
       .eq('user_id', userId)
@@ -62,7 +63,7 @@ export const organizationRepository = {
 
     const orgIds = data.map((member) => member.organization_id);
 
-    const { data: organizations, error: orgsError } = await supabase
+    const { data: organizations, error: orgsError } = await supabaseAdmin
       .from('organizations')
       .select('*')
       .in('id', orgIds);
@@ -72,26 +73,19 @@ export const organizationRepository = {
     return organizations || [];
   },
 
-  async create(
-    supabase: SupabaseClient<Database>,
-    organizationData: any,
-    userId: string,
-  ): Promise<Organization> {
+  async create(organizationData: any, userId: string): Promise<Organization> {
     try {
-      // Check if user is already in an organization
-      const isAlreadyInOrg = await this.isUserInAnyOrganization(supabase, userId);
+      const isAlreadyInOrg = await this.isUserInAnyOrganization(userId);
       if (isAlreadyInOrg) {
         throw new Error('User is already a member of an organization');
       }
 
-      // Parse and validate with Zod
       const validData = createOrganizationSchema.parse({
         ...organizationData,
         verification_status: 'pending',
       });
 
-      // Insert to database
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('organizations')
         .insert({
           ...validData,
@@ -103,8 +97,7 @@ export const organizationRepository = {
       if (error) throw new Error(`Failed to create organization: ${error.message}`);
       if (!data) throw new Error('Failed to retrieve created organization');
 
-      // Create member record
-      await supabase.from('organization_members').insert({
+      await supabaseAdmin.from('organization_members').insert({
         organization_id: data.id,
         user_id: userId,
         role: 'owner',
@@ -120,11 +113,7 @@ export const organizationRepository = {
     }
   },
 
-  async update(
-    supabase: SupabaseClient<Database>,
-    id: string,
-    organizationData: any,
-  ): Promise<Organization> {
+  async update(id: string, organizationData: any): Promise<Organization> {
     try {
       // Validate with Zod
       const validData = updateOrganizationSchema.parse({
@@ -132,7 +121,8 @@ export const organizationRepository = {
         ...organizationData,
       });
 
-      const { data, error } = await supabase
+      // Use admin client for backend operations
+      const { data, error } = await supabaseAdmin
         .from('organizations')
         .update(validData)
         .eq('id', id)
@@ -151,25 +141,21 @@ export const organizationRepository = {
     }
   },
 
-  async delete(supabase: SupabaseClient<Database>, id: string): Promise<void> {
-    const { error } = await supabase.from('organizations').delete().eq('id', id);
+  async delete(id: string): Promise<void> {
+    const { error } = await supabaseAdmin.from('organizations').delete().eq('id', id);
 
     if (error) throw new Error(`Failed to delete organization: ${error.message}`);
   },
 
-  async addMember(
-    supabase: SupabaseClient<Database>,
-    organizationId: string,
-    userId: string,
-    role: string,
-  ): Promise<void> {
+  async addMember(organizationId: string, userId: string, role: string): Promise<void> {
     // Check if user is already in an organization
-    const isAlreadyInOrg = await this.isUserInAnyOrganization(supabase, userId);
+    const isAlreadyInOrg = await this.isUserInAnyOrganization(userId);
     if (isAlreadyInOrg) {
       throw new Error('User is already a member of an organization');
     }
 
-    const { error } = await supabase.from('organization_members').insert({
+    // Use admin client for backend operations
+    const { error } = await supabaseAdmin.from('organization_members').insert({
       organization_id: organizationId,
       user_id: userId,
       role,
@@ -179,12 +165,8 @@ export const organizationRepository = {
     if (error) throw new Error(`Failed to add member: ${error.message}`);
   },
 
-  async removeMember(
-    supabase: SupabaseClient<Database>,
-    organizationId: string,
-    userId: string,
-  ): Promise<void> {
-    const { error } = await supabase.from('organization_members').delete().match({
+  async removeMember(organizationId: string, userId: string): Promise<void> {
+    const { error } = await supabaseAdmin.from('organization_members').delete().match({
       organization_id: organizationId,
       user_id: userId,
     });
@@ -192,8 +174,8 @@ export const organizationRepository = {
     if (error) throw new Error(`Failed to remove member: ${error.message}`);
   },
 
-  async getMembers(supabase: SupabaseClient<Database>, organizationId: string): Promise<any[]> {
-    const { data, error } = await supabase
+  async getMembers(organizationId: string): Promise<any[]> {
+    const { data, error } = await supabaseAdmin
       .from('organization_members')
       .select(
         `
@@ -208,7 +190,6 @@ export const organizationRepository = {
     return data || [];
   },
 
-  // System-level operations needed during signup/bootstrap
   async createSystem(organizationData: any, userId: string): Promise<Organization> {
     try {
       // Check if user is already in an organization
@@ -223,13 +204,11 @@ export const organizationRepository = {
         throw new Error('User is already a member of an organization');
       }
 
-      // Parse and validate with Zod
       const validData = createOrganizationSchema.parse({
         ...organizationData,
         verification_status: 'pending',
       });
 
-      // Insert to database
       const { data, error } = await supabaseAdmin
         .from('organizations')
         .insert({
@@ -242,7 +221,6 @@ export const organizationRepository = {
       if (error) throw new Error(`Failed to create organization: ${error.message}`);
       if (!data) throw new Error('Failed to retrieve created organization');
 
-      // Create member record
       await supabaseAdmin.from('organization_members').insert({
         organization_id: data.id,
         user_id: userId,

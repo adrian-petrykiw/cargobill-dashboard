@@ -30,47 +30,69 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const organizationData = result.data;
 
-    // Check if user is already in an organization
-    const isAlreadyInOrg = await organizationRepository.isUserInAnyOrganization(
-      req.supabase,
-      req.user.id,
-    );
+    console.log(`Processing multisig creation for user ID: ${req.user.id}`);
 
-    if (isAlreadyInOrg) {
-      return res.status(409).json({
+    // Get user from database with better error handling
+    let user;
+    try {
+      // Extract and validate the ID
+      const userId = req.user.id;
+      if (typeof userId !== 'string') {
+        console.error(`Invalid user ID type: ${typeof userId}, value:`, userId);
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_USER_ID',
+            message: 'Invalid user ID format',
+          },
+        });
+      }
+
+      user = await userRepository.getById(userId);
+      console.log(`Retrieved user: ${user.id}, wallet: ${user.wallet_address?.substring(0, 8)}...`);
+    } catch (error) {
+      console.error('Failed to get user for multisig creation:', error);
+      return res.status(404).json({
         success: false,
         error: {
-          code: 'ALREADY_IN_ORGANIZATION',
-          message: 'User is already a member of an organization',
+          code: 'USER_NOT_FOUND',
+          message: error instanceof Error ? error.message : 'User not found',
         },
       });
     }
 
-    // Get user from database - wallet address is validated by withAuth
-    const user = await userRepository.getById(req.supabase, req.user.id);
-
     // Create multisig transaction using the validated wallet address
-    const multisigTxData = await squadsService.createMultisigTransaction({
-      userWalletAddress: user.wallet_address!,
-      organizationName: organizationData.business_name,
-    });
+    try {
+      const multisigTxData = await squadsService.createMultisigTransaction({
+        userWalletAddress: user.wallet_address!,
+        organizationName: organizationData.business_name,
+      });
 
-    // Return only the transaction data and the organization data for creation later
-    return res.status(200).json({
-      success: true,
-      data: {
-        organizationData,
-        multisigData: {
-          serializedTransaction: multisigTxData.serializedTransaction,
-          multisigPda: multisigTxData.multisigPda,
-          createKey: multisigTxData.createKey,
-          blockhash: multisigTxData.blockhash,
-          lastValidBlockHeight: multisigTxData.lastValidBlockHeight,
+      return res.status(200).json({
+        success: true,
+        data: {
+          organizationData,
+          multisigData: {
+            serializedTransaction: multisigTxData.serializedTransaction,
+            multisigPda: multisigTxData.multisigPda,
+            createKey: multisigTxData.createKey,
+            blockhash: multisigTxData.blockhash,
+            lastValidBlockHeight: multisigTxData.lastValidBlockHeight,
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      console.error('Failed to create multisig transaction:', error);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'MULTISIG_CREATION_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to create multisig transaction',
+        },
+      });
+    }
   } catch (error) {
-    console.error('Failed to prepare multisig transaction:', error);
+    console.error('Unexpected error in create-with-multisig endpoint:', error);
     return res.status(500).json(ApiError.internalServerError(error));
   }
 }

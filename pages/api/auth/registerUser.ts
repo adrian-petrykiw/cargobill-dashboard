@@ -63,7 +63,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
 
       // Update existing user with any new information
-      user = await userRepository.update(supabase, existingUser.id, userData);
+      user = await userRepository.update(existingUser.id, userData);
     } else {
       // Create new user (uses admin privileges)
       user = await userRepository.create(userData);

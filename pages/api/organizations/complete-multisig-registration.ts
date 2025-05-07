@@ -43,7 +43,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     // Create organization with minimal operational wallet data
     const organization = await organizationRepository.create(
-      req.supabase,
       {
         ...organizationData,
         name: organizationData.business_name,

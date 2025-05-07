@@ -4,18 +4,40 @@ import { createUserSchema, updateUserSchema, type User } from '@/schemas/user.sc
 import { SupabaseClient } from '@supabase/supabase-js';
 
 export const userRepository = {
-  // Regular operations (respects RLS)
-  async getById(supabase: SupabaseClient<Database>, id: string): Promise<User> {
-    const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+  // pages/api/_services/repositories/userRepository.ts
+  async getById(id: unknown): Promise<User> {
+    if (!id) {
+      throw new Error('User ID is required but was undefined or empty');
+    }
 
-    if (error) throw new Error(`Failed to get user: ${error.message}`);
-    if (!data) throw new Error(`User not found: ${id}`);
+    // Ensure id is a string
+    if (typeof id !== 'string') {
+      throw new Error(`Invalid ID type: ${typeof id}, value: ${JSON.stringify(id)}`);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      console.error(`Database error fetching user ${id}:`, error);
+      throw new Error(`Failed to get user: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error(`User not found with ID: ${id}`);
+    }
 
     return data;
   },
 
-  // System operation (uses admin client)
   async getByAuthIdSystem(authId: string): Promise<User | null> {
+    if (!authId) {
+      throw new Error('Auth ID is required but was undefined or empty');
+    }
+
     const { data, error } = await supabaseAdmin
       .from('users')
       .select('*')
@@ -26,7 +48,6 @@ export const userRepository = {
     return data;
   },
 
-  // System operation (uses admin client)
   async create(userData: any): Promise<User> {
     try {
       const validData = createUserSchema.parse(userData);
@@ -45,7 +66,6 @@ export const userRepository = {
     }
   },
 
-  // System operation (for signup flow)
   async createUser(authId: string, userData: any): Promise<User> {
     const existingUser = await this.getByAuthIdSystem(authId);
 
@@ -59,15 +79,15 @@ export const userRepository = {
     });
   },
 
-  // Regular operation (respects RLS)
-  async update(supabase: SupabaseClient<Database>, id: string, userData: any): Promise<User> {
+  // API operation (now uses admin client)
+  async update(id: string, userData: any): Promise<User> {
     try {
       const validData = updateUserSchema.parse({
         id,
         ...userData,
       });
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('users')
         .update(validData)
         .eq('id', id)
@@ -86,9 +106,8 @@ export const userRepository = {
     }
   },
 
-  // Regular operation (respects RLS)
-  async getUserOrganizations(supabase: SupabaseClient<Database>, userId: string): Promise<any[]> {
-    const { data, error } = await supabase
+  async getUserOrganizations(userId: string): Promise<any[]> {
+    const { data, error } = await supabaseAdmin
       .from('organization_members')
       .select(
         `

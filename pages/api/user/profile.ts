@@ -11,7 +11,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   try {
     // GET: Retrieve current user profile
     if (req.method === 'GET') {
-      const profile = await userRepository.getById(req.supabase, req.user.id);
+      const profile = await userRepository.getById(req.user.id);
       return res.status(200).json({
         success: true,
         data: profile,
@@ -34,7 +34,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           });
         }
 
-        const updatedProfile = await userRepository.update(req.supabase, req.user.id, result.data);
+        const updatedProfile = await userRepository.update(req.user.id, result.data);
 
         return res.status(200).json({
           success: true,

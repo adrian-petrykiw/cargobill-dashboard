@@ -9,7 +9,6 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/db/supabase';
 
 export const transactionRepository = {
-  // System-level operations
   async getByIdSystem(id: string): Promise<Transaction> {
     const { data, error } = await supabaseAdmin
       .from('transactions')
@@ -23,9 +22,12 @@ export const transactionRepository = {
     return data;
   },
 
-  // RLS-respecting operations
-  async getById(supabase: SupabaseClient<Database>, id: string): Promise<Transaction> {
-    const { data, error } = await supabase.from('transactions').select('*').eq('id', id).single();
+  async getById(id: string): Promise<Transaction> {
+    const { data, error } = await supabaseAdmin
+      .from('transactions')
+      .select('*')
+      .eq('id', id)
+      .single();
 
     if (error) throw new Error(`Failed to get transaction: ${error.message}`);
     if (!data) throw new Error(`Transaction not found: ${id}`);
@@ -33,11 +35,8 @@ export const transactionRepository = {
     return data;
   },
 
-  async getByOrganizationId(
-    supabase: SupabaseClient<Database>,
-    organizationId: string,
-  ): Promise<Transaction[]> {
-    const { data, error } = await supabase
+  async getByOrganizationId(organizationId: string): Promise<Transaction[]> {
+    const { data, error } = await supabaseAdmin
       .from('transactions')
       .select('*')
       .or(
@@ -50,11 +49,8 @@ export const transactionRepository = {
     return data || [];
   },
 
-  async getSentByOrganizationId(
-    supabase: SupabaseClient<Database>,
-    organizationId: string,
-  ): Promise<Transaction[]> {
-    const { data, error } = await supabase
+  async getSentByOrganizationId(organizationId: string): Promise<Transaction[]> {
+    const { data, error } = await supabaseAdmin
       .from('transactions')
       .select('*')
       .eq('sender_organization_id', organizationId)
@@ -65,11 +61,8 @@ export const transactionRepository = {
     return data || [];
   },
 
-  async getReceivedByOrganizationId(
-    supabase: SupabaseClient<Database>,
-    organizationId: string,
-  ): Promise<Transaction[]> {
-    const { data, error } = await supabase
+  async getReceivedByOrganizationId(organizationId: string): Promise<Transaction[]> {
+    const { data, error } = await supabaseAdmin
       .from('transactions')
       .select('*')
       .eq('recipient_organization_id', organizationId)
@@ -80,11 +73,7 @@ export const transactionRepository = {
     return data || [];
   },
 
-  async create(
-    supabase: SupabaseClient<Database>,
-    transactionData: any,
-    userId: string,
-  ): Promise<Transaction> {
+  async create(transactionData: any, userId: string): Promise<Transaction> {
     try {
       // Validate with Zod
       const validData = createTransactionSchema.parse({
@@ -92,7 +81,8 @@ export const transactionRepository = {
         created_by: userId,
       });
 
-      const { data, error } = await supabase
+      // Use admin client for backend operations
+      const { data, error } = await supabaseAdmin
         .from('transactions')
         .insert(validData)
         .select()
@@ -110,12 +100,7 @@ export const transactionRepository = {
     }
   },
 
-  async update(
-    supabase: SupabaseClient<Database>,
-    id: string,
-    transactionData: any,
-    userId: string,
-  ): Promise<Transaction> {
+  async update(id: string, transactionData: any, userId: string): Promise<Transaction> {
     try {
       // Validate with Zod
       const validData = updateTransactionSchema.parse({
@@ -125,7 +110,8 @@ export const transactionRepository = {
         updated_at: new Date().toISOString(),
       });
 
-      const { data, error } = await supabase
+      // Use admin client for backend operations
+      const { data, error } = await supabaseAdmin
         .from('transactions')
         .update(validData)
         .eq('id', id)
@@ -144,22 +130,12 @@ export const transactionRepository = {
     }
   },
 
-  async updateStatus(
-    supabase: SupabaseClient<Database>,
-    id: string,
-    status: string,
-    userId: string,
-  ): Promise<Transaction> {
-    return this.update(supabase, id, { status }, userId);
+  async updateStatus(id: string, status: string, userId: string): Promise<Transaction> {
+    return this.update(id, { status }, userId);
   },
 
-  async completeTransaction(
-    supabase: SupabaseClient<Database>,
-    id: string,
-    userId: string,
-  ): Promise<Transaction> {
+  async completeTransaction(id: string, userId: string): Promise<Transaction> {
     return this.update(
-      supabase,
       id,
       {
         status: 'completed',
@@ -169,10 +145,8 @@ export const transactionRepository = {
     );
   },
 
-  // System operations (for integration with blockchain systems, etc.)
   async createSystem(transactionData: any, userId: string): Promise<Transaction> {
     try {
-      // Validate with Zod
       const validData = createTransactionSchema.parse({
         ...transactionData,
         created_by: userId,
@@ -198,7 +172,6 @@ export const transactionRepository = {
 
   async updateSystem(id: string, transactionData: any, userId: string): Promise<Transaction> {
     try {
-      // Validate with Zod
       const validData = updateTransactionSchema.parse({
         id,
         ...transactionData,
