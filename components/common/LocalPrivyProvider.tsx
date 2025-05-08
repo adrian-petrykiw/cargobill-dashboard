@@ -53,14 +53,13 @@ function LocalPrivyProvider({ children }: { children: React.ReactNode }) {
       config={{
         // Login methods configuration
         loginMethods: ['email', 'google'],
-
         // UI customization
-        // appearance: {
-        //   theme: 'light',
-        //   accentColor: '#3531FF', // CargoBill blue
-        //   landingHeader: 'Login',
-        //   // logo: '/assets/cargobill_icon_logo.svg',
-        // },
+        appearance: {
+          // theme: 'light',
+          // accentColor: '#3531FF', // CargoBill blue
+          landingHeader: 'Login',
+          // logo: '/assets/cargobill_icon_logo.svg',
+        },
 
         // Embedded wallet configuration
         // embeddedWallets: {

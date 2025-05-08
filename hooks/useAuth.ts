@@ -1,11 +1,14 @@
 // hooks/useAuth.ts
-import { usePrivy, useLogin } from '@privy-io/react-auth';
+import { usePrivy, useLogin, User } from '@privy-io/react-auth';
+import type { LinkedAccountWithMetadata } from '@privy-io/react-auth';
+import { LoginMethod } from '@/types/privy';
 import { useRouter } from 'next/router';
 import { userApi } from '@/services/api/userApi';
 import { ROUTES } from '@/constants/routes';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '@/stores/userStore';
+import { useState, useCallback } from 'react';
 
 export default function useAuth() {
   const { logout: privyLogout, authenticated, ready, user: privyUser, getAccessToken } = usePrivy();
@@ -13,11 +16,72 @@ export default function useAuth() {
   const queryClient = useQueryClient();
   const setUser = useUserStore((state) => state.setUser);
   const clearUser = useUserStore((state) => state.clearUser);
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false);
 
-  const { login } = useLogin({
-    onComplete: async (params) => {
+  // Check if user exists in our database
+  const checkUserExists = async (authId: string, email: string): Promise<boolean> => {
+    if (!authId || !email) {
+      console.error('Auth ID and email are required for user existence check');
+      return false;
+    }
+
+    try {
+      console.log('Checking if user exists:', { authId, email });
+      return await userApi.checkUserExists({
+        auth_id: authId,
+        email: email,
+      });
+    } catch (error) {
+      console.error('Error checking if user exists:', error);
+      throw new Error('Failed to verify user existence');
+    }
+  };
+
+  // Handle auth completion - determine signup/signin automatically
+  const handleAuthComplete = useCallback(
+    async (params: {
+      user: User;
+      isNewUser: boolean;
+      wasAlreadyAuthenticated: boolean;
+      loginMethod: LoginMethod | null;
+      loginAccount: LinkedAccountWithMetadata | null;
+    }) => {
+      const { user, isNewUser } = params;
+      setIsCheckingAuth(true);
+
       try {
-        const { user, isNewUser } = params;
+        // Extract email, preferring OAuth provider emails if available
+        const email = user.email?.address || user.google?.email || '';
+        const authId = user.id;
+
+        if (!email || !authId) {
+          toast.error('Missing user information. Please try again.');
+          await privyLogout();
+          setIsCheckingAuth(false);
+          return;
+        }
+
+        // Check if user exists in our database
+        let userExists;
+        try {
+          userExists = await checkUserExists(authId, email);
+          console.log('User exists check result:', userExists);
+        } catch (error) {
+          console.error('Failed to verify user in database:', error);
+          toast.error('Authentication system error. Please try again later.');
+          await privyLogout();
+          setIsCheckingAuth(false);
+          return;
+        }
+
+        // Automatically determine if we're signing up or logging in
+        // User exists -> login flow
+        // User doesn't exist -> signup flow
+        const effectivelySigningUp = !userExists;
+        console.log(
+          `User ${userExists ? 'exists' : 'does not exist'}, treating as ${effectivelySigningUp ? 'signup' : 'signin'}`,
+        );
 
         let firstName = '';
         let lastName = '';
@@ -30,38 +94,80 @@ export default function useAuth() {
 
         let userData;
 
-        if (isNewUser) {
-          userData = await userApi.registerUser({
-            auth_id: user.id,
-            email: user.email?.address || user.google?.email || '',
-            first_name: firstName,
-            last_name: lastName,
-            wallet_address: user.wallet?.address || '',
-          });
+        try {
+          // Call the appropriate API endpoint based on whether user exists
+          if (effectivelySigningUp) {
+            console.log('Registering new user');
+            userData = await userApi.registerUser({
+              auth_id: user.id,
+              email: email,
+              first_name: firstName,
+              last_name: lastName,
+              wallet_address: user.wallet?.address || '',
+            });
+            toast.success('Account created successfully!');
+          } else {
+            console.log('Logging in existing user');
+            userData = await userApi.loginUser({
+              auth_id: user.id,
+              email: email,
+              wallet_address: user.wallet?.address || '',
+            });
+            toast.success('Logged in successfully!');
+          }
 
           setUser(userData);
-        } else {
-          userData = await userApi.loginUser({
-            auth_id: user.id,
-            email: user.email?.address || user.google?.email,
-            wallet_address: user.wallet?.address,
-          });
+          queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+          queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
 
-          setUser(userData);
+          // Delay redirect slightly to ensure toast is visible
+          setTimeout(() => {
+            router.push(ROUTES.DASHBOARD);
+            setIsCheckingAuth(false);
+          }, 500);
+        } catch (error) {
+          console.error('Error during authentication with backend:', error);
+          toast.error('Authentication failed with our system. Please try again.');
+          await privyLogout();
+          setIsCheckingAuth(false);
         }
-
-        queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-        queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
-
-        router.push(ROUTES.DASHBOARD);
       } catch (error) {
-        console.error('Error during authentication:', error);
+        console.error('Error during authentication flow:', error);
         toast.error('Authentication failed. Please try again.');
+        await privyLogout();
+        setIsCheckingAuth(false);
       }
+    },
+    [privyLogout, router, setUser, queryClient],
+  );
+
+  // Set up useLogin hook with the callback
+  const { login: privyLogin } = useLogin({
+    onComplete: handleAuthComplete,
+    onError: (error) => {
+      console.error('Privy login error:', error);
+      toast.error('Authentication failed. Please try again.');
+      setIsCheckingAuth(false);
     },
   });
 
+  // The isSignUp parameter is kept for backward compatibility
+  // but we now determine signup/signin automatically based on user existence
+  const login = useCallback(
+    (isSignUp = false) => {
+      return () => {
+        setIsSigningUp(isSignUp); // This is now mostly for logging purposes
+        setIsCheckingAuth(true);
+        privyLogin();
+      };
+    },
+    [privyLogin],
+  );
+
   const verifyServerAuth = async () => {
+    // Don't verify if we're already checking auth state
+    if (isCheckingAuth) return { authenticated: false };
+
     const token = await getAccessToken();
     if (!token) return { authenticated: false };
 
@@ -88,16 +194,9 @@ export default function useAuth() {
   };
 
   const logout = async () => {
-    // Clear Zustand store
     clearUser();
-
-    // Clear React Query cache
     queryClient.clear();
-
-    // Logout from Privy
     await privyLogout();
-
-    // Redirect to signin
     router.push(ROUTES.AUTH.SIGNIN);
   };
 
@@ -109,5 +208,6 @@ export default function useAuth() {
     privyUser,
     getToken: getAccessToken,
     verifyServerAuth,
+    isCheckingAuth,
   };
 }

@@ -1,4 +1,4 @@
-// pages/signin/index.tsx
+// pages/auth.tsx
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { usePrivy } from '@privy-io/react-auth';
@@ -8,13 +8,13 @@ import { ROUTES } from '@/constants/routes';
 import RootLayout from '@/components/layouts/RootLayout';
 import useAuth from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function LoginPage() {
+export default function AuthPage() {
   const router = useRouter();
   const { login, verifyServerAuth, isCheckingAuth } = useAuth();
   const { ready, authenticated } = usePrivy();
-  const signIn = login(false);
+  const authenticate = login(false); // Default to signin flow
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -34,7 +34,7 @@ export default function LoginPage() {
   }, [ready, authenticated, router, verifyServerAuth, isCheckingAuth]);
 
   return (
-    <RootLayout title="Login · CargoBill" description="Log in to your CargoBill account">
+    <RootLayout title="CargoBill Authentication" description="Access your CargoBill account">
       <div className="flex h-screen w-full items-center justify-center">
         <Card className="w-full max-w-sm">
           <CardHeader className="flex flex-col items-center space-y-1 pt-10">
@@ -46,23 +46,25 @@ export default function LoginPage() {
               className="h-8 w-8"
             />
             <CardTitle className="text-center text-xl font-medium">Welcome</CardTitle>
-            <CardDescription className="text-center">Sign in to your account</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 p-6">
             <Button
-              onClick={signIn}
+              onClick={authenticate}
               className="h-10 w-full bg-slate-900 text-white hover:bg-slate-800"
               size="lg"
+              disabled={isCheckingAuth}
             >
-              Sign in
+              {isCheckingAuth ? 'Authenticating...' : 'Login'}
             </Button>
-            <div className="flex items-center justify-center gap-1 text-sm">
-              <span className="text-muted-foreground">Don't have an account?</span>
+            <div className="flex items-center justify-end gap-1 text-sm">
+              <span className="text-muted-foreground">Don't have access?</span>
               <Link
-                href={ROUTES.AUTH.SIGNUP || '#'}
+                href="https://cargobill.co"
                 className="font-medium text-blue-600 hover:underline"
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                Sign up &rarr;
+                Request →
               </Link>
             </div>
           </CardContent>

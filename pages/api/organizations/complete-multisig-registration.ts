@@ -5,20 +5,7 @@ import { withRateLimit } from '../_middleware/rateLimiter';
 import { organizationRepository } from '../_services/repositories/organizationRepository';
 import { ApiError } from '@/types/api/errors';
 import { AuthenticatedRequest } from '@/types/api/requests';
-import { z } from 'zod';
-
-const completeMultisigSchema = z.object({
-  organizationData: z.object({
-    business_name: z.string(),
-    primary_address: z.string(),
-    country: z.string(),
-    business_email: z.string().email(),
-    primary_phone: z.string().optional(),
-  }),
-  signature: z.string(),
-  multisigPda: z.string(),
-  createKey: z.string(),
-});
+import { createOrgWithMultisigSchema } from '@/schemas/multisig.schema';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -26,8 +13,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   try {
-    // Validate request
-    const result = completeMultisigSchema.safeParse(req.body);
+    const result = createOrgWithMultisigSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({
         success: false,

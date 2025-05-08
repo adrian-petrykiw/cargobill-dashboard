@@ -1,16 +1,13 @@
 // pages/api/_services/repositories/userRepository.ts
-import { supabaseAdmin, createSupabaseClient, Database } from '../../_config/supabase';
+import { supabaseAdmin } from '../../_config/supabase';
 import { createUserSchema, updateUserSchema, type User } from '@/schemas/user.schema';
-import { SupabaseClient } from '@supabase/supabase-js';
 
 export const userRepository = {
-  // pages/api/_services/repositories/userRepository.ts
   async getById(id: unknown): Promise<User> {
     if (!id) {
       throw new Error('User ID is required but was undefined or empty');
     }
 
-    // Ensure id is a string
     if (typeof id !== 'string') {
       throw new Error(`Invalid ID type: ${typeof id}, value: ${JSON.stringify(id)}`);
     }
@@ -45,6 +42,36 @@ export const userRepository = {
       .maybeSingle();
 
     if (error) throw new Error(`Failed to get user by auth ID: ${error.message}`);
+    return data;
+  },
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    if (!email) {
+      throw new Error('Email is required but was undefined or empty');
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) throw new Error(`Failed to get user by email: ${error.message}`);
+    return data;
+  },
+
+  async getUserByWallet(walletAddress: string): Promise<User | null> {
+    if (!walletAddress) {
+      throw new Error('Wallet address is required but was undefined or empty');
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('wallet_address', walletAddress)
+      .maybeSingle();
+
+    if (error) throw new Error(`Failed to get user by wallet address: ${error.message}`);
     return data;
   },
 

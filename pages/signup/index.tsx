@@ -1,9 +1,7 @@
-// @/pages/signup/index.tsx
+// pages/signup/index.tsx
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { usePrivy } from '@privy-io/react-auth';
-import { PrivyClient } from '@privy-io/server-auth';
-import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ROUTES } from '@/constants/routes';
@@ -12,45 +10,28 @@ import useAuth from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
-// Server-side authentication check
-export const getServerSideProps: GetServerSideProps = async ({ req }) => {
-  const cookieAuthToken = req.cookies['privy-token'];
-
-  // If no cookie found, allow access to signup page
-  if (!cookieAuthToken) return { props: {} };
-
-  const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-  const PRIVY_APP_SECRET = process.env.PRIVY_APP_SECRET;
-  const client = new PrivyClient(PRIVY_APP_ID!, PRIVY_APP_SECRET!);
-
-  try {
-    // Verify the token
-    const claims = await client.verifyAuthToken(cookieAuthToken);
-
-    // Token is valid, user is already authenticated, redirect to dashboard
-    return {
-      redirect: {
-        destination: ROUTES.DASHBOARD,
-        permanent: false,
-      },
-    };
-  } catch (error) {
-    // Invalid token, allow access to signup page
-    return { props: {} };
-  }
-};
-
 export default function SignupPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, verifyServerAuth, isCheckingAuth } = useAuth();
   const { ready, authenticated } = usePrivy();
+  const signUp = login(true);
 
-  // Client-side authentication check
   useEffect(() => {
-    if (ready && authenticated) {
-      router.push(ROUTES.DASHBOARD);
-    }
-  }, [ready, authenticated, router]);
+    const checkAuth = async () => {
+      if (isCheckingAuth) return;
+
+      if (ready) {
+        if (authenticated) {
+          const { authenticated: serverAuthenticated } = await verifyServerAuth();
+          if (serverAuthenticated) {
+            router.push(ROUTES.DASHBOARD);
+          }
+        }
+      }
+    };
+
+    checkAuth();
+  }, [ready, authenticated, router, verifyServerAuth, isCheckingAuth]);
 
   return (
     <RootLayout title="Sign up · CargoBill" description="Create your CargoBill account">
@@ -69,7 +50,7 @@ export default function SignupPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4 p-6">
             <Button
-              onClick={login}
+              onClick={signUp}
               className="h-10 w-full bg-slate-900 text-white hover:bg-slate-800"
               size="lg"
             >

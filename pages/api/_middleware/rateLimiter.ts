@@ -8,10 +8,10 @@ import { AuthenticatedRequest } from '@/types/api/requests';
 export type RateLimitType = 'standard' | 'auth' | 'payment' | 'public';
 
 const rateLimitConfigs: Record<RateLimitType, { limit: number; windowSeconds: number }> = {
-  standard: { limit: 60, windowSeconds: 60 }, // 60 requests per minute
-  auth: { limit: 10, windowSeconds: 60 }, // 10 login attempts per minute
-  payment: { limit: 5, windowSeconds: 60 }, // 5 payment operations per minute
-  public: { limit: 120, windowSeconds: 60 }, // 120 requests per minute for public endpoints
+  standard: { limit: 500, windowSeconds: 60 }, // 60 requests per minute
+  auth: { limit: 200, windowSeconds: 60 }, // 10 login attempts per minute
+  payment: { limit: 50, windowSeconds: 60 }, // 5 payment operations per minute
+  public: { limit: 1000, windowSeconds: 60 }, // 120 requests per minute for public endpoints
 };
 
 // Mock rate limiter for development when Redis is not available

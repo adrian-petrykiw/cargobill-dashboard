@@ -9,15 +9,35 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import {
   onboardingOrganizationSchema,
   OnboardingOrganizationRequest,
 } from '@/schemas/organization.schema';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import toast from 'react-hot-toast';
+import { countryOptions } from '@/constants/countryData';
+import { DialogClose } from '@radix-ui/react-dialog';
+import { Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface OrganizationSetupModalProps {
   isOpen: boolean;
@@ -33,126 +53,146 @@ export function OrganizationSetupModal({
   const [primaryEmailSameAsAdmin, setPrimaryEmailSameAsAdmin] = useState(true);
   const { createOrganization, isCreating } = useOnboarding();
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<OnboardingOrganizationRequest>({
+  // Define form with useForm hook
+  const form = useForm<OnboardingOrganizationRequest>({
     resolver: zodResolver(onboardingOrganizationSchema),
     defaultValues: {
+      business_name: '',
+      country: 'USA', // Default to USA
       business_email: userEmail,
     },
   });
-
-  const watchedEmail = watch('business_email');
 
   // Update business email when checkbox changes
   const handlePrimaryEmailToggle = (checked: boolean) => {
     setPrimaryEmailSameAsAdmin(checked);
     if (checked) {
-      setValue('business_email', userEmail);
+      form.setValue('business_email', userEmail, { shouldValidate: true });
     }
   };
 
+  // Form submission handler
   const onSubmit = async (data: OnboardingOrganizationRequest) => {
     try {
       await createOrganization(data);
       onClose();
     } catch (error) {
-      // Error handling is done in the hook
+      console.error('Failed to create organization: ', error);
+      toast.error('Failed to create organization');
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] focus:outline-none focus:ring-0 focus:ring-offset-0 ">
         <DialogHeader>
-          <DialogTitle>Complete Your Business Setup</DialogTitle>
+          <DialogTitle>Complete Your Account Setup</DialogTitle>
           <DialogDescription>
-            Let's set up your business account. We'll create a secure multisig wallet for your
-            organization.
+            Let's setup your business! We'll create a secure wallet for payment operations.
           </DialogDescription>
         </DialogHeader>
+        <DialogClose disabled={isCreating}></DialogClose>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="business_name">Business Name *</Label>
-            <Input
-              id="business_name"
-              {...register('business_name')}
-              placeholder="Enter your business name"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Business Name Field */}
+            <FormField
+              control={form.control}
+              name="business_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Business Name *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter your business name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {errors.business_name && (
-              <p className="text-sm text-red-500">{errors.business_name.message}</p>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="primary_address">Business Address *</Label>
-            <Input
-              id="primary_address"
-              {...register('primary_address')}
-              placeholder="Enter your business address"
+            {/* Country Field */}
+            <FormField
+              control={form.control}
+              name="country"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Country *</FormLabel>
+                    <TooltipProvider delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-4 w-4 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent align="end" className="max-w-[260px] text-xs">
+                          <p>
+                            Select the country where this office is located. If you have offices in
+                            multiple countries register each office as a separate organization
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a country" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent side="bottom" align="center" position="popper" sideOffset={4}>
+                      {countryOptions.map((country) => (
+                        <SelectItem key={country.code} value={country.code}>
+                          {country.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {errors.primary_address && (
-              <p className="text-sm text-red-500">{errors.primary_address.message}</p>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="country">Country *</Label>
-            <Input
-              id="country"
-              {...register('country')}
-              placeholder="Enter country code (e.g., US)"
-              maxLength={2}
+            {/* Business Email Field */}
+            <FormField
+              control={form.control}
+              name="business_email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Business Email *</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Enter business email"
+                      {...field}
+                      disabled={primaryEmailSameAsAdmin}
+                    />
+                  </FormControl>
+                  <div className="flex items-center space-x-2 pt-2">
+                    <Checkbox
+                      id="primaryEmailSameAsAdmin"
+                      checked={primaryEmailSameAsAdmin}
+                      onCheckedChange={handlePrimaryEmailToggle}
+                    />
+                    <FormLabel
+                      htmlFor="primaryEmailSameAsAdmin"
+                      className="text-sm text-gray-600 font-normal"
+                    >
+                      My email is the primary business email
+                    </FormLabel>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {errors.country && <p className="text-sm text-red-500">{errors.country.message}</p>}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="business_email">Business Email *</Label>
-            <Input
-              id="business_email"
-              {...register('business_email')}
-              disabled={primaryEmailSameAsAdmin}
-              placeholder="Enter business email"
-            />
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="primaryEmailSameAsAdmin"
-                checked={primaryEmailSameAsAdmin}
-                onCheckedChange={handlePrimaryEmailToggle}
-              />
-              <Label htmlFor="primaryEmailSameAsAdmin" className="text-sm text-gray-600">
-                Primary organization email same as admin
-              </Label>
+            <div className="flex w-full justify-center pt-4">
+              {/* <Button variant="default" onClick={onClose} disabled={isCreating} className="flex-1">
+                Cancel
+              </Button> */}
+              <Button type="submit" disabled={isCreating} className="w-full">
+                {isCreating ? 'Creating Organization...' : 'Create'}
+              </Button>
             </div>
-            {errors.business_email && (
-              <p className="text-sm text-red-500">{errors.business_email.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="primary_phone">Business Phone (Optional)</Label>
-            <Input
-              id="primary_phone"
-              {...register('primary_phone')}
-              placeholder="Enter business phone"
-            />
-          </div>
-
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button variant="outline" onClick={onClose} disabled={isCreating}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isCreating} className="bg-blue-600 hover:bg-blue-700">
-              {isCreating ? 'Creating Organization...' : 'Create Organization'}
-            </Button>
-          </div>
-        </form>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

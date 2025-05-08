@@ -40,4 +40,35 @@ export const userApi = {
     if (!data.success) throw new Error(data.error?.message || 'Failed to login user');
     return data.data!;
   },
+
+  // services/api/userApi.ts - update the checkUserExists method
+  checkUserExists: async ({
+    auth_id,
+    email,
+  }: {
+    auth_id: string;
+    email: string;
+  }): Promise<boolean> => {
+    if (!auth_id || !email) {
+      throw new Error('Both auth_id and email are required');
+    }
+
+    try {
+      console.log('Making API call to check if user exists:', { auth_id, email });
+      const { data } = await axios.post<ApiResponse<{ exists: boolean }>>('/api/users/exists', {
+        auth_id,
+        email,
+      });
+
+      if (!data.success) {
+        throw new Error(data.error?.message || 'Failed to check user existence');
+      }
+
+      console.log('User exists API response:', data);
+      return data.data?.exists || false;
+    } catch (error) {
+      console.error('API error checking user existence:', error);
+      throw error;
+    }
+  },
 };

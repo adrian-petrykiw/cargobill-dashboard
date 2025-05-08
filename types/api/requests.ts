@@ -30,7 +30,6 @@ export interface AuthenticatedRequest extends NextApiRequest {
     id: string;
     authId: string;
   };
-  supabase: SupabaseClient<Database>;
 }
 
 // Organization Requests

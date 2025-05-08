@@ -7,6 +7,7 @@ import { ROUTES } from '@/constants/routes';
 import AppSidebar from '../common/AppSidebar';
 import AppHeader from '../common/AppHeader';
 import Spinner from '../common/Spinner';
+import useAuth from '@/hooks/useAuth';
 
 type ProtectedLayoutProps = {
   children: React.ReactNode;
@@ -16,16 +17,17 @@ type ProtectedLayoutProps = {
 function ProtectedLayout({ children, title = 'CargoBill' }: ProtectedLayoutProps) {
   const router = useRouter();
   const { ready, authenticated } = usePrivy();
+  const { isCheckingAuth } = useAuth();
 
-  // Only redirect if not authenticated
+  // Only redirect if not authenticated and not in the process of checking auth
   useEffect(() => {
-    if (ready && !authenticated) {
+    if (ready && !authenticated && !isCheckingAuth) {
       router.replace(ROUTES.AUTH.SIGNIN);
     }
-  }, [ready, authenticated, router]);
+  }, [ready, authenticated, router, isCheckingAuth]);
 
-  // Show loading state only during initial authentication check
-  if (!ready || !authenticated) {
+  // Show loading state during authentication check or when auth is being checked
+  if (!ready || !authenticated || isCheckingAuth) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Spinner />

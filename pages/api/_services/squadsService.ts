@@ -103,7 +103,6 @@ export const squadsService = {
     };
   },
 
-  // Keep the same createTokenATAInstruction method
   async createTokenATAInstruction(vaultPda: PublicKey, tokenMint: PublicKey, payer: PublicKey) {
     const [ata] = PublicKey.findProgramAddressSync(
       [vaultPda.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), tokenMint.toBuffer()],
