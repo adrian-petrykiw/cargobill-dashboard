@@ -1,11 +1,10 @@
-// pages/api/users/registerUser.ts
+// pages/api/auth/registerUser.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withRateLimit } from '../_middleware/rateLimiter';
 import { userRepository } from '../_services/repositories/userRepository';
 import * as privyService from '../_services/privyService';
 import { ApiError } from '@/types/api/errors';
 import { createUserSchema } from '@/schemas/user.schema';
-import { createSupabaseClient } from '../_config/supabase';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -55,13 +54,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     let user;
     if (existingUser) {
-      // Create authenticated context for the update
-      const supabase = createSupabaseClient();
-      supabase.rpc('set_claim', {
-        claim: 'user_id',
-        value: existingUser.id,
-      });
-
       // Update existing user with any new information
       user = await userRepository.update(existingUser.id, userData);
     } else {
@@ -74,8 +66,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       data: user,
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    return res.status(500).json(ApiError.internalServerError(error));
+    console.error('Registration error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      userData: {
+        ...req.body,
+        auth_id: req.body?.auth_id ? '[REDACTED]' : undefined,
+      },
+    });
+
+    return res
+      .status(500)
+      .json(
+        ApiError.internalServerError(
+          error instanceof Error ? error.message : 'Unknown server error',
+        ),
+      );
   }
 }
 

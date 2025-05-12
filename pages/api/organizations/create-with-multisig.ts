@@ -4,7 +4,7 @@ import { withAuthMiddleware } from '../_middleware/withAuth';
 import { withRateLimit } from '../_middleware/rateLimiter';
 import { organizationRepository } from '../_services/repositories/organizationRepository';
 import { userRepository } from '../_services/repositories/userRepository';
-import { squadsService } from '../_services/squadsService';
+import { squadsService, SquadsServiceError } from '../_services/squadsService';
 import { onboardingOrganizationSchema } from '@/schemas/organization.schema';
 import { ApiError } from '@/types/api/errors';
 import { AuthenticatedRequest } from '@/types/api/requests';
@@ -50,6 +50,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
       user = await userRepository.getById(userId);
       console.log(`Retrieved user: ${user.id}, wallet: ${user.wallet_address?.substring(0, 8)}...`);
+
+      if (!user.wallet_address) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'USER_WALLET_MISSING',
+            message: 'User does not have a wallet address. Please complete wallet setup first.',
+          },
+        });
+      }
     } catch (error) {
       console.error('Failed to get user for multisig creation:', error);
       return res.status(404).json({
@@ -64,7 +74,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // Create multisig transaction using the validated wallet address
     try {
       const multisigTxData = await squadsService.createMultisigTransaction({
-        userWalletAddress: user.wallet_address!,
+        userWalletAddress: user.wallet_address,
         organizationName: organizationData.business_name,
       });
 
@@ -83,6 +93,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       });
     } catch (error) {
       console.error('Failed to create multisig transaction:', error);
+
+      if (error instanceof SquadsServiceError) {
+        // Handle specific Squads errors with appropriate status codes
+        const statusCode = error.code.includes('INVALID') ? 400 : 500;
+
+        return res.status(statusCode).json({
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          },
+        });
+      }
+
       return res.status(500).json({
         success: false,
         error: {

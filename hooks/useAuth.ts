@@ -98,6 +98,7 @@ export default function useAuth() {
           // Call the appropriate API endpoint based on whether user exists
           if (effectivelySigningUp) {
             console.log('Registering new user');
+
             userData = await userApi.registerUser({
               auth_id: user.id,
               email: email,
@@ -105,6 +106,23 @@ export default function useAuth() {
               last_name: lastName,
               wallet_address: user.wallet?.address || '',
             });
+
+            // After successful registration, clear any cached queries
+            queryClient.clear();
+
+            // Additional verification that user was registered properly
+            // This is important to ensure DB operations completed
+            const verifyRegistration = await checkUserExists(authId, email);
+            if (!verifyRegistration) {
+              console.warn('User registration verification failed - retrying...');
+              // Wait a second and try checking again
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              const secondAttempt = await checkUserExists(authId, email);
+              if (!secondAttempt) {
+                throw new Error('User registration did not complete successfully');
+              }
+            }
+
             toast.success('Account created successfully!');
           } else {
             console.log('Logging in existing user');
@@ -116,15 +134,23 @@ export default function useAuth() {
             toast.success('Logged in successfully!');
           }
 
+          // Update local state with user data
           setUser(userData);
-          queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-          queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
 
-          // Delay redirect slightly to ensure toast is visible
+          // Added delay before redirect and query invalidation
+          // This is critical to ensure user registration propagates to database
           setTimeout(() => {
-            router.push(ROUTES.DASHBOARD);
-            setIsCheckingAuth(false);
-          }, 500);
+            // Important: Invalidate queries after redirecting to dashboard
+            // and ensure sufficient delay for registration to complete
+            router.push(ROUTES.DASHBOARD).then(() => {
+              setTimeout(() => {
+                // Re-fetch user profile and organizations after redirect
+                queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+                queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
+                setIsCheckingAuth(false);
+              }, 500);
+            });
+          }, 1500);
         } catch (error) {
           console.error('Error during authentication with backend:', error);
           toast.error('Authentication failed with our system. Please try again.');

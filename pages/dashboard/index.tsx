@@ -14,32 +14,29 @@ import {
 import { Badge } from '@/components/ui/badge';
 import OnboardingChecklist from '@/components/onboarding/OnboardingChecklist';
 import { useUserStore } from '@/stores/userStore';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { organizationApi } from '@/services/api/organizationApi';
+import { useQueryClient } from '@tanstack/react-query';
+import { useOrganizations } from '@/hooks/useOrganizations';
 import { OrganizationSetupModal } from '@/components/onboarding/OnboardingSetupModal';
+import type { Organization } from '@/schemas/organization.schema';
 
 export default function Dashboard() {
   const user = useUserStore((state) => state.user);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const queryClient = useQueryClient();
 
-  // Check if user has an organization
-  const { data: organizations, isLoading: isLoadingOrgs } = useQuery({
-    queryKey: ['userOrganizations'],
-    queryFn: async () => await organizationApi.getOrganizations(),
-    enabled: !!user?.id,
-  });
+  // Use the organizations hook
+  const { organizations, isLoading: isLoadingOrgs } = useOrganizations();
 
   // Determine if we should show onboarding
   useEffect(() => {
     if (!isLoadingOrgs && user) {
       // If user has no organizations, show onboarding
-      if (!organizations || organizations.length === 0) {
+      if (organizations.length === 0) {
         setShowOnboarding(true);
         return;
       }
 
-      // Get primary organization
+      // Get primary organization (user should only ever be in one org)
       const primaryOrg = organizations[0];
 
       // Check for basic required fields

@@ -9,11 +9,16 @@ import {
   SignatureStatus,
   ComputeBudgetProgram,
   TransactionMessage,
-  Signer,
 } from '@solana/web3.js';
 import { getAccount, TokenAccountNotFoundError, Account } from '@solana/spl-token';
-import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import bs58 from 'bs58';
+
+// Type guard to check if a transaction is a VersionedTransaction
+function isVersionedTransaction(
+  tx: Transaction | VersionedTransaction,
+): tx is VersionedTransaction {
+  return 'version' in tx;
+}
 
 export class SolanaService {
   private static instance: SolanaService;
@@ -103,9 +108,59 @@ export class SolanaService {
     return null;
   }
 
+  /**
+   * Debug helper function to log transaction details
+   */
+  private logTransactionDetails(serializedTx: string, format: 'base64' | 'bs58' = 'base64'): void {
+    try {
+      // Convert between formats for debugging
+      let base64Tx: string;
+      let bs58Tx: string;
+
+      if (format === 'base64') {
+        base64Tx = serializedTx;
+        const buffer = Buffer.from(serializedTx, 'base64');
+        bs58Tx = bs58.encode(buffer);
+      } else {
+        bs58Tx = serializedTx;
+        const buffer = bs58.decode(bs58Tx);
+        // Fix: Use Buffer.from() instead of buffer.toString() to handle encoding properly
+        base64Tx = Buffer.from(buffer).toString('base64');
+      }
+
+      console.log('Transaction Details:', {
+        format,
+        length: serializedTx.length,
+        base64Length: base64Tx.length,
+        bs58Length: bs58Tx.length,
+        // Only log the first and last part to avoid console clutter
+        base64Preview: `${base64Tx.substring(0, 50)}...${base64Tx.substring(base64Tx.length - 50)}`,
+        bs58Preview: `${bs58Tx.substring(0, 50)}...${bs58Tx.substring(bs58Tx.length - 50)}`,
+      });
+
+      // Try to analyze the transaction format
+      const buffer =
+        format === 'base64' ? Buffer.from(serializedTx, 'base64') : bs58.decode(bs58Tx);
+
+      console.log('Buffer length:', buffer.length);
+
+      // Check if it might be a versioned transaction
+      if (buffer.length > 0) {
+        const firstByte = buffer[0];
+        console.log('First byte:', firstByte, '(Versioned tx should have first byte 0-127)');
+      }
+    } catch (error) {
+      console.error('Error logging transaction details:', error);
+    }
+  }
+
+  /**
+   * Sign and send a transaction using Privy wallet
+   * Compatible with Solana Web3.js v1 and Privy's ConnectedSolanaWallet
+   */
   async signAndSendTransaction(
     serializedTransaction: string,
-    embeddedWallet?: any,
+    privyWallet: any,
     options: {
       commitment?: Commitment;
       maxRetries?: number;
@@ -115,7 +170,6 @@ export class SolanaService {
     } = {},
   ): Promise<{
     signature: string;
-    signedTransaction: Transaction | VersionedTransaction;
     status: SignatureStatus | null;
   }> {
     const {
@@ -126,41 +180,124 @@ export class SolanaService {
       timeout = 30000,
     } = options;
 
-    // Get wallet if not provided
-    let wallet = embeddedWallet;
-    if (!wallet) {
-      const { wallets } = useSolanaWallets();
-      wallet = wallets.find((w) => w.walletClientType === 'privy');
-      if (!wallet) {
-        throw new Error('No embedded wallet found');
-      }
+    if (!privyWallet) {
+      throw new Error('No wallet provided');
     }
 
-    // Deserialize the transaction
-    const transaction = Transaction.from(Buffer.from(serializedTransaction, 'base64'));
+    console.log('Starting transaction signing process with Privy wallet');
 
-    // Sign transaction
-    const signedTransaction = await wallet.signTransaction(transaction);
+    // Log transaction details for debugging
+    // this.logTransactionDetails(serializedTransaction, 'base64');
 
-    // Send the signed transaction
-    const signature = await this.connection.sendRawTransaction(signedTransaction.serialize(), {
-      skipPreflight,
-      preflightCommitment,
-      maxRetries,
-    });
+    try {
+      // First try the direct wallet.sendTransaction method (should work for most cases)
+      try {
+        console.log('Using direct sendTransaction method from wallet');
+        // For Privy with Web3.js v1, we need to pass the Buffer directly
+        // const txBuffer = Buffer.from(serializedTransaction, 'base64');
 
-    console.log('Transaction sent with signature:', signature);
+        // // Convert to bs58 for debugging in Solana explorer
+        // const bs58Tx = bs58.encode(txBuffer);
+        // console.log('Transaction in bs58 format (for explorer):', bs58Tx);
 
-    // Confirm the transaction
-    const status = await this.confirmTransactionWithRetry(
-      signature,
-      commitment,
-      maxRetries,
-      timeout,
-      this.connection,
-    );
+        const recoveredTransaction = Transaction.from(bs58.decode(serializedTransaction));
+        console.log(
+          'MADE IT HERE 1: Transaction in base64 format (for explorer): ',
+          Buffer.from(recoveredTransaction.serializeMessage()).toString('base64'),
+        );
 
-    return { signature, signedTransaction, status };
+        const signedTransaction = await privyWallet.signTransaction(
+          recoveredTransaction,
+          this.connection,
+        );
+
+        console.log(
+          'MADE IT HERE 2: Transaction in base64 format (for explorer): ',
+          Buffer.from(signedTransaction.serializeMessage()).toString('base64'),
+        );
+
+        // Directly use the wallet's sendTransaction method (compatible with web3.js v1)
+        const signature = await privyWallet.sendTransaction(signedTransaction, this.connection);
+        console.log('Transaction sent with signature:', signature);
+
+        // Confirm the transaction
+        const status = await this.confirmTransactionWithRetry(
+          signature,
+          commitment,
+          maxRetries,
+          timeout,
+          this.connection,
+        );
+
+        return {
+          signature,
+          status,
+        };
+      } catch (directMethodError) {
+        // If direct method fails (especially for Squads complex transactions), try fallback
+        console.error('Direct sendTransaction method failed:', directMethodError);
+        console.log('Attempting fallback method for complex transaction...');
+
+        // Try using the provider.request method directly (bypasses transaction deserialization)
+        const provider = await privyWallet.getProvider();
+        if (!provider) {
+          throw new Error('Wallet provider not available');
+        }
+
+        // Convert the transaction to bs58 encoding (expected by Solana wallet adapters)
+        const bs58EncodedTx = bs58.encode(Buffer.from(serializedTransaction, 'base64'));
+
+        // Call the provider directly
+        const result = await provider.request({
+          method: 'sendTransaction',
+          params: {
+            transaction: bs58EncodedTx,
+            options: {
+              skipPreflight,
+              preflightCommitment,
+              maxRetries,
+            },
+          },
+        });
+
+        const fallbackSignature = result.signature;
+        console.log('Transaction sent via fallback method with signature:', fallbackSignature);
+
+        // Confirm the transaction
+        const fallbackStatus = await this.confirmTransactionWithRetry(
+          fallbackSignature,
+          commitment,
+          maxRetries,
+          timeout,
+          this.connection,
+        );
+
+        return {
+          signature: fallbackSignature,
+          status: fallbackStatus,
+        };
+      }
+    } catch (error) {
+      console.error('Error in signAndSendTransaction:', error);
+
+      if (error instanceof Error) {
+        // User rejection handling
+        if (error.message.includes('User rejected')) {
+          throw new Error('Transaction was rejected by the user');
+        }
+
+        // Buffer deserialization error handling - common with Squads transactions
+        if (error.message.includes('Reached end of buffer')) {
+          throw new Error(
+            'Failed to process Squads multisig transaction. This is likely due to the complex transaction format which is a known issue.',
+          );
+        }
+
+        throw error;
+      } else {
+        throw new Error(String(error));
+      }
+    }
   }
 
   async addPriorityFee(

@@ -18,30 +18,57 @@ export const userApi = {
       return data.data || null;
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      return null;
+      if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+        throw new Error(error.response.data.error.message);
+      }
+      throw new Error('Failed to fetch user profile. Please try again later.');
     }
   },
 
   async updateProfile(profile: UpdateProfileRequest): Promise<User> {
-    const { data } = await axios.put<ApiResponse<User>>('/api/users/profile', profile);
-    if (!data.success) throw new Error(data.error?.message || 'Failed to update profile');
-    return data.data!;
+    try {
+      const { data } = await axios.put<ApiResponse<User>>('/api/users/profile', profile);
+      if (!data.success) throw new Error(data.error?.message || 'Failed to update profile');
+      return data.data!;
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+        throw new Error(error.response.data.error.message);
+      }
+      throw new Error('Failed to update profile. Please try again later.');
+    }
   },
 
   // Authentication
   async registerUser(userData: CreateUserRequest): Promise<User> {
-    const { data } = await axios.post<ApiResponse<User>>('/api/auth/registerUser', userData);
-    if (!data.success) throw new Error(data.error?.message || 'Failed to register user');
-    return data.data!;
+    try {
+      const { data } = await axios.post<ApiResponse<User>>('/api/auth/registerUser', userData);
+
+      if (!data.success) throw new Error(data.error?.message || 'Failed to register user');
+      return data.data!;
+    } catch (error) {
+      console.error('Registration error details:', error);
+      if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+        throw new Error(error.response.data.error.message);
+      }
+      throw new Error('Registration failed. Please try again later.');
+    }
   },
 
   async loginUser(credentials: LoginRequest): Promise<User> {
-    const { data } = await axios.post<ApiResponse<User>>('/api/auth/loginUser', credentials);
-    if (!data.success) throw new Error(data.error?.message || 'Failed to login user');
-    return data.data!;
+    try {
+      const { data } = await axios.post<ApiResponse<User>>('/api/auth/loginUser', credentials);
+      if (!data.success) throw new Error(data.error?.message || 'Failed to login user');
+      return data.data!;
+    } catch (error) {
+      console.error('Login error details:', error);
+      if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+        throw new Error(error.response.data.error.message);
+      }
+      throw new Error('Login failed. Please check your credentials and try again.');
+    }
   },
 
-  // services/api/userApi.ts - update the checkUserExists method
   checkUserExists: async ({
     auth_id,
     email,
@@ -68,7 +95,10 @@ export const userApi = {
       return data.data?.exists || false;
     } catch (error) {
       console.error('API error checking user existence:', error);
-      throw error;
+      if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+        throw new Error(error.response.data.error.message);
+      }
+      throw new Error('Failed to verify user existence. Please try again later.');
     }
   },
 };

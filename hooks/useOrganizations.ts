@@ -1,34 +1,57 @@
 // hooks/useOrganizations.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
-import type { Organization, CreateOrganizationRequest } from '@/schemas/organization.schema';
+import { organizationApi } from '@/services/api/organizationApi';
+import type { Organization, UpdateOrganizationRequest } from '@/schemas/organization.schema';
+import toast from 'react-hot-toast';
 
 export function useOrganizations() {
   const queryClient = useQueryClient();
 
+  // Query to get organizations
   const organizationsQuery = useQuery<Organization[]>({
-    queryKey: ['organizations'],
+    queryKey: ['userOrganizations'],
     queryFn: async () => {
-      const { data } = await axios.get('/api/organizations');
-      return data.data;
+      try {
+        return await organizationApi.getOrganizations();
+      } catch (error) {
+        // Special handling for new users - return empty array instead of throwing
+        if (error instanceof Error && error.message.includes('User not registered in system')) {
+          console.warn('User may be new, returning empty organizations list');
+          return [];
+        }
+        throw error;
+      }
     },
+    retry: 3,
+    retryDelay: 1000,
   });
 
-  const createOrganization = useMutation({
-    mutationFn: async (newOrg: CreateOrganizationRequest) => {
-      const { data } = await axios.post('/api/organizations', newOrg);
-      return data.data;
+  // Mutation to update organization
+  const updateOrganizationMutation = useMutation({
+    mutationFn: async ({
+      id,
+      updateData,
+    }: {
+      id: string;
+      updateData: UpdateOrganizationRequest;
+    }) => {
+      return await organizationApi.updateOrganization(id, updateData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
+      toast.success('Organization updated successfully!');
+    },
+    onError: (error: Error) => {
+      console.error('Failed to update organization:', error);
+      toast.error(error.message || 'Failed to update organization');
     },
   });
 
   return {
-    organizations: organizationsQuery.data || [],
+    organizations: organizationsQuery.data || ([] as Organization[]),
     isLoading: organizationsQuery.isLoading,
     error: organizationsQuery.error,
-    createOrganization: createOrganization.mutate,
-    isCreating: createOrganization.isPending,
+    updateOrganization: updateOrganizationMutation.mutate,
+    isUpdating: updateOrganizationMutation.isPending,
   };
 }
