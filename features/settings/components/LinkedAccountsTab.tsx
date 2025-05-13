@@ -92,10 +92,10 @@ export default function LinkedAccountsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Linked Accounts</h2>
         <Button onClick={() => setIsAddAccountModalOpen(true)}>Add Payment Method</Button>
-      </div>
+      </div> */}
 
       {/* Bank Accounts Section */}
       <Card>
@@ -129,7 +129,6 @@ export default function LinkedAccountsTab() {
             <div className="text-center py-8">
               <p className="text-sm text-gray-500 mb-4">No bank accounts linked yet.</p>
               <Button
-                variant="outline"
                 onClick={() => {
                   setPaymentMethodTab('bank');
                   setIsAddAccountModalOpen(true);
@@ -174,7 +173,6 @@ export default function LinkedAccountsTab() {
             <div className="text-center py-8">
               <p className="text-sm text-gray-500 mb-4">No credit cards linked yet.</p>
               <Button
-                variant="outline"
                 onClick={() => {
                   setPaymentMethodTab('card');
                   setIsAddAccountModalOpen(true);

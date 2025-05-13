@@ -197,7 +197,7 @@ export default function VerificationForm({ organizationId }: VerificationFormPro
       }
 
       // Call API to start KYB verification
-      await initiateVerification(termsAccepted);
+      //   await initiateVerification(termsAccepted);
 
       // Redirect to status page
       router.push(`/organizations/${organizationId}/verification-status`);

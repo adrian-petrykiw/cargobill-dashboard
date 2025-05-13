@@ -2,10 +2,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { useOrganizations } from '@/hooks/useOrganizations';
-import VerificationForm from './VerificationForm';
+import SimpleVerificationForm from './SimpleVerificationForm';
 
 export default function OrganizationTab() {
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
@@ -29,7 +29,6 @@ export default function OrganizationTab() {
       });
 
       // Update the onboarding store to match the actual verification status
-      // Using !! to convert to boolean, avoiding the TypeScript error
       setBusinessVerified(isBusinessVerified);
     }
   }, [organization, isBusinessVerified, setBusinessVerified]);
@@ -166,11 +165,17 @@ export default function OrganizationTab() {
         </CardContent>
       </Card>
 
-      {/* Business Verification Dialog with VerificationForm component */}
+      {/* Use of DialogTitle to fix accessibility warning */}
       {organization && (
         <Dialog open={isVerificationModalOpen} onOpenChange={setIsVerificationModalOpen}>
-          <DialogContent className="max-w-4xl h-[80vh] overflow-y-auto">
-            <VerificationForm organizationId={organization.id} />
+          <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] overflow-y-auto">
+            <DialogTitle className="sr-only">Business Verification</DialogTitle>
+            <SimpleVerificationForm
+              organizationId={organization.id}
+              organizationName={organization.name}
+              organizationEmail={organization.business_details['email']}
+              organizationCountry={organization.country || 'USA'}
+            />
           </DialogContent>
         </Dialog>
       )}

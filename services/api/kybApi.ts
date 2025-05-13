@@ -1,47 +1,35 @@
 // services/api/kybApi.ts
 import axios from 'axios';
 import type { ApiResponse } from '@/types/api/responses';
-import {
-  DocumentTokenRequest,
-  BeneficialOwnerTokenRequest,
-  VerificationInitiationRequest,
-  VerificationStatusResponse,
-  BusinessBasicInfoFormData,
-} from '@/schemas/kyb.schema';
+
+// DocumentToken request type
+interface DocumentTokenRequest {
+  organizationId: string;
+  documentType: string;
+  fields: string[];
+}
+
+// VerificationInitiationRequest type
+interface VerificationInitiationRequest {
+  organizationId: string;
+  termsAccepted: boolean;
+  formData?: Record<string, any>;
+}
+
+// Verification status response
+interface VerificationStatusResponse {
+  status: 'pass' | 'fail' | 'pending' | 'pending_review' | 'none' | 'verified' | 'rejected';
+  requires_manual_review?: boolean;
+  last_verified_at?: string | null;
+  verification_provider?: string;
+  verification_details?: Record<string, any>;
+}
 
 export const kybApi = {
-  async saveBasicInfo(organizationId: string, data: BusinessBasicInfoFormData): Promise<void> {
-    try {
-      const { data: response } = await axios.patch<ApiResponse<void>>(
-        `/api/organizations/${organizationId}`,
-        {
-          name: data.name,
-          business_type: data.businessType,
-          primary_business_purpose: 'Logistics Payments',
-          business_description: data.businessDescription,
-          is_intermediary: data.isIntermediary === 'yes',
-          website: data.website,
-          phone_number: data.phoneNumber,
-          email: data.email,
-          countries_of_operation: data.countriesOfOperation,
-          verification_status: 'in_progress',
-        },
-      );
-
-      if (!response.success) {
-        throw new Error(response.error?.message || 'Failed to save business information');
-      }
-    } catch (error) {
-      console.error('Error saving basic information:', error);
-      if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
-        throw new Error(error.response.data.error.message);
-      }
-      throw new Error('Failed to save business information. Please try again later.');
-    }
-  },
-
+  // Get document token for secure document upload
   async getDocumentToken(request: DocumentTokenRequest): Promise<string> {
     try {
+      console.log('Requesting document token for:', request.documentType);
       const { data } = await axios.post<ApiResponse<{ token: string }>>(
         '/api/footprint/document-token',
         request,
@@ -61,8 +49,14 @@ export const kybApi = {
     }
   },
 
-  async getBeneficialOwnerToken(request: BeneficialOwnerTokenRequest): Promise<string> {
+  // Get beneficial owner token for secure data collection
+  async getBeneficialOwnerToken(request: {
+    organizationId: string;
+    ownerIndex: number;
+    fields: string[];
+  }): Promise<string> {
     try {
+      console.log('Requesting beneficial owner token for owner index:', request.ownerIndex);
       const { data } = await axios.post<ApiResponse<{ token: string }>>(
         '/api/footprint/beneficial-owner-token',
         request,
@@ -82,13 +76,18 @@ export const kybApi = {
     }
   },
 
+  // Initiate verification with Footprint
   async initiateVerification(
     request: VerificationInitiationRequest,
   ): Promise<VerificationStatusResponse> {
     try {
+      console.log('Initiating verification for organization:', request.organizationId);
       const { data } = await axios.post<ApiResponse<VerificationStatusResponse>>(
         `/api/organizations/${request.organizationId}/verify`,
-        { termsAccepted: request.termsAccepted },
+        {
+          termsAccepted: request.termsAccepted,
+          formData: request.formData, // Pass along any form data for updating org
+        },
       );
 
       if (!data.success || !data.data) {
@@ -105,8 +104,10 @@ export const kybApi = {
     }
   },
 
+  // Get verification status
   async getVerificationStatus(organizationId: string): Promise<VerificationStatusResponse> {
     try {
+      console.log('Getting verification status for organization:', organizationId);
       const { data } = await axios.get<ApiResponse<VerificationStatusResponse>>(
         `/api/organizations/${organizationId}/verification-status`,
       );
