@@ -1,11 +1,22 @@
 // pages/api/_config/logger.ts
 import pino from 'pino';
 import path from 'path';
-
-const logDir = path.join(process.cwd(), 'logs');
 import fs from 'fs';
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+
+// Determine if we're in a serverless environment (Vercel)
+const isServerless = process.env.VERCEL === '1';
+
+// Use /tmp directory in serverless environments, otherwise use process.cwd()
+const logDir = isServerless ? '/tmp/logs' : path.join(process.cwd(), 'logs');
+
+// Only try to create directory if we're not in a serverless environment or using /tmp
+if ((!isServerless || logDir.startsWith('/tmp')) && !fs.existsSync(logDir)) {
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+  } catch (error) {
+    console.warn(`Unable to create log directory: ${error}`);
+    // Continue execution even if directory creation fails
+  }
 }
 
 let transport: any;
@@ -18,21 +29,29 @@ if (process.env.NODE_ENV !== 'production') {
     },
   };
 } else {
-  // Production: multiple targets
-  transport = {
-    targets: [
-      {
-        target: 'pino/file',
-        options: { destination: 1 },
-        level: 'info',
-      },
-      {
-        target: 'pino/file',
-        level: 'error',
-        options: { destination: path.join(logDir, 'error.log') },
-      },
-    ],
-  };
+  // Production: Use console logging in serverless environments
+  if (isServerless) {
+    transport = {
+      target: 'pino/file',
+      options: { destination: 1 }, // stdout
+    };
+  } else {
+    // Production non-serverless: multiple targets
+    transport = {
+      targets: [
+        {
+          target: 'pino/file',
+          options: { destination: 1 },
+          level: 'info',
+        },
+        {
+          target: 'pino/file',
+          level: 'error',
+          options: { destination: path.join(logDir, 'error.log') },
+        },
+      ],
+    };
+  }
 }
 
 // Log levels
