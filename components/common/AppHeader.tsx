@@ -53,7 +53,7 @@ export default function EnhancedAppHeader() {
           {/* Currency Selector */}
           <div className="flex items-center">
             <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger className="w-auto h-auto border-0 focus:ring-0 focus:ring-offset-0 shadow-none gap-1 p-1">
+              <SelectTrigger className="w-auto bg-white h-auto border-0 focus:ring-0 focus:ring-offset-0 shadow-none gap-1 p-1">
                 <SelectValue placeholder="Currency" />
               </SelectTrigger>
               <SelectContent align="center">

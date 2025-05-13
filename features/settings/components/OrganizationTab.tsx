@@ -1,16 +1,56 @@
 // components/settings/OrganizationTab.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useOnboardingStore } from '@/stores/onboardingStore';
-import { useOrganizations } from '@/hooks/useOrganizations'; // Using the existing hook
+import { useOrganizations } from '@/hooks/useOrganizations';
 import VerificationForm from './VerificationForm';
 
 export default function OrganizationTab() {
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
-  const { businessVerified, setBusinessVerified } = useOnboardingStore();
-  const { organization } = useOrganizations(); // Using the updated hook with organization property
+  const { setBusinessVerified } = useOnboardingStore();
+  const { organization, isLoading } = useOrganizations();
+
+  // Determine business verification status from organization data with proper null check
+  const isBusinessVerified = !!(
+    organization &&
+    organization.last_verified_at !== null &&
+    organization.verification_status === 'verified'
+  );
+
+  // Sync the onboarding store with the organization verification status
+  useEffect(() => {
+    if (organization) {
+      console.log('Organization verification status:', {
+        verificationStatus: organization.verification_status,
+        lastVerifiedAt: organization.last_verified_at,
+        isVerified: isBusinessVerified,
+      });
+
+      // Update the onboarding store to match the actual verification status
+      // Using !! to convert to boolean, avoiding the TypeScript error
+      setBusinessVerified(isBusinessVerified);
+    }
+  }, [organization, isBusinessVerified, setBusinessVerified]);
+
+  // Show loading state while organization data is loading
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-md font-medium">Business Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8">
+              <p className="text-sm text-gray-500">Loading your business information...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -19,7 +59,7 @@ export default function OrganizationTab() {
           <CardTitle className="text-md font-medium">Business Information</CardTitle>
         </CardHeader>
         <CardContent>
-          {businessVerified ? (
+          {isBusinessVerified ? (
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Legal Name</h3>
@@ -90,7 +130,7 @@ export default function OrganizationTab() {
           <CardTitle className="text-md font-medium">Documents</CardTitle>
         </CardHeader>
         <CardContent>
-          {businessVerified ? (
+          {isBusinessVerified ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b pb-2">
                 <div>

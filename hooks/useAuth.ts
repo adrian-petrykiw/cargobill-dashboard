@@ -4,10 +4,12 @@ import type { LinkedAccountWithMetadata } from '@privy-io/react-auth';
 import { LoginMethod } from '@/types/privy';
 import { useRouter } from 'next/router';
 import { userApi } from '@/services/api/userApi';
+import { organizationApi } from '@/services/api/organizationApi'; // Add this import
 import { ROUTES } from '@/constants/routes';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useUserStore } from '@/stores/userStore';
+import { useOrganizationStore } from '@/stores/organizationStore'; // Add this import if implementing the store
 import { useState, useCallback } from 'react';
 
 export default function useAuth() {
@@ -16,6 +18,11 @@ export default function useAuth() {
   const queryClient = useQueryClient();
   const setUser = useUserStore((state) => state.setUser);
   const clearUser = useUserStore((state) => state.clearUser);
+
+  // Add this if implementing the organizationStore
+  const setOrganizations = useOrganizationStore((state) => state.setOrganizations);
+  const clearOrganizations = useOrganizationStore((state) => state.clearOrganizations);
+
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(false);
 
@@ -35,6 +42,26 @@ export default function useAuth() {
     } catch (error) {
       console.error('Error checking if user exists:', error);
       throw new Error('Failed to verify user existence');
+    }
+  };
+
+  // New function to prefetch organizations
+  const fetchOrganizationsData = async () => {
+    try {
+      console.log('Prefetching organization data before redirect');
+      const organizations = await organizationApi.getOrganizations();
+      console.log('Prefetched organizations:', organizations);
+
+      // Set organizations in the store if available
+      if (organizations && organizations.length > 0) {
+        setOrganizations(organizations);
+        // Prefill the query cache
+        queryClient.setQueryData(['userOrganizations'], organizations);
+      }
+      return organizations;
+    } catch (error) {
+      console.warn('Error prefetching organizations (normal for new users):', error);
+      return []; // Return empty array on error
     }
   };
 
@@ -76,8 +103,6 @@ export default function useAuth() {
         }
 
         // Automatically determine if we're signing up or logging in
-        // User exists -> login flow
-        // User doesn't exist -> signup flow
         const effectivelySigningUp = !userExists;
         console.log(
           `User ${userExists ? 'exists' : 'does not exist'}, treating as ${effectivelySigningUp ? 'signup' : 'signin'}`,
@@ -111,11 +136,9 @@ export default function useAuth() {
             queryClient.clear();
 
             // Additional verification that user was registered properly
-            // This is important to ensure DB operations completed
             const verifyRegistration = await checkUserExists(authId, email);
             if (!verifyRegistration) {
               console.warn('User registration verification failed - retrying...');
-              // Wait a second and try checking again
               await new Promise((resolve) => setTimeout(resolve, 1000));
               const secondAttempt = await checkUserExists(authId, email);
               if (!secondAttempt) {
@@ -137,20 +160,17 @@ export default function useAuth() {
           // Update local state with user data
           setUser(userData);
 
-          // Added delay before redirect and query invalidation
-          // This is critical to ensure user registration propagates to database
+          // IMPORTANT CHANGE: Prefetch organization data before redirect
+          // This ensures the dashboard has organization data when it renders
+          await fetchOrganizationsData();
+
+          // Now redirect with data already loaded
           setTimeout(() => {
-            // Important: Invalidate queries after redirecting to dashboard
-            // and ensure sufficient delay for registration to complete
             router.push(ROUTES.DASHBOARD).then(() => {
-              setTimeout(() => {
-                // Re-fetch user profile and organizations after redirect
-                queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-                queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
-                setIsCheckingAuth(false);
-              }, 500);
+              // No need for another timeout since we already prefetched the data
+              setIsCheckingAuth(false);
             });
-          }, 1500);
+          }, 500);
         } catch (error) {
           console.error('Error during authentication with backend:', error);
           toast.error('Authentication failed with our system. Please try again.');
@@ -164,7 +184,7 @@ export default function useAuth() {
         setIsCheckingAuth(false);
       }
     },
-    [privyLogout, router, setUser, queryClient],
+    [privyLogout, router, setUser, setOrganizations, queryClient],
   );
 
   // Set up useLogin hook with the callback
@@ -178,7 +198,6 @@ export default function useAuth() {
   });
 
   // The isSignUp parameter is kept for backward compatibility
-  // but we now determine signup/signin automatically based on user existence
   const login = useCallback(
     (isSignUp = false) => {
       return () => {
@@ -221,6 +240,7 @@ export default function useAuth() {
 
   const logout = async () => {
     clearUser();
+    clearOrganizations();
     queryClient.clear();
     await privyLogout();
     router.push(ROUTES.AUTH.SIGNIN);

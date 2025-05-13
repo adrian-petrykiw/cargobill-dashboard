@@ -30,25 +30,53 @@ export default function Dashboard() {
   // Determine if we should show onboarding
   useEffect(() => {
     if (!isLoadingOrgs && user) {
+      console.log('Dashboard - Organizations data:', organizations);
+
       // If user has no organizations, show onboarding
-      if (organizations.length === 0) {
+      if (!organizations || organizations.length === 0) {
+        console.log('Dashboard - No organizations found, showing onboarding');
         setShowOnboarding(true);
         return;
       }
 
       // Get primary organization (user should only ever be in one org)
       const primaryOrg = organizations[0];
+      console.log('Dashboard - Primary organization:', primaryOrg);
 
-      // Check for basic required fields
-      const hasBasicInfo =
-        !!primaryOrg.name && !!primaryOrg.country && !!primaryOrg.primary_address;
+      // Check for basic required fields - let's be specific in our checks
+      const hasName = Boolean(primaryOrg.name);
+      const hasCountry = Boolean(primaryOrg.country);
+      const hasBusinessDetails = Boolean(primaryOrg.business_details);
+      const hasOperationalWallet = Boolean(primaryOrg.operational_wallet);
 
-      // Check for operational wallet
-      const hasOperationalWallet = !!primaryOrg.operational_wallet;
+      // Check verification status based on the last_verified_at field
+      const isVerified =
+        primaryOrg.last_verified_at !== null && primaryOrg.verification_status === 'verified';
 
-      // Show onboarding if basic info or operational wallet is missing
+      console.log('Dashboard - Organization verification status:', {
+        verificationStatus: primaryOrg.verification_status,
+        lastVerifiedAt: primaryOrg.last_verified_at,
+        isVerified,
+      });
+
+      const hasBasicInfo = hasName && hasCountry && hasBusinessDetails;
+
+      console.log('Dashboard - Organization field checks:', {
+        hasName,
+        hasCountry,
+        hasBusinessDetails,
+        hasOperationalWallet,
+        hasBasicInfo,
+        isVerified,
+      });
+
+      // Show onboarding only if basic info or operational wallet is missing
       if (!hasBasicInfo || !hasOperationalWallet) {
+        console.log('Dashboard - Missing required org fields, showing onboarding');
         setShowOnboarding(true);
+      } else {
+        console.log('Dashboard - Organization data complete, hiding onboarding');
+        setShowOnboarding(false);
       }
     }
   }, [user, organizations, isLoadingOrgs]);
@@ -58,6 +86,12 @@ export default function Dashboard() {
     setShowOnboarding(false);
     // Force refresh organizations data to check if onboarding is still needed
     queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
+
+    // Add a timeout to ensure the modal is fully closed before potentially showing it again
+    setTimeout(() => {
+      // We need to fetch fresh data after the invalidation
+      queryClient.refetchQueries({ queryKey: ['userOrganizations'] });
+    }, 500);
   };
 
   return (

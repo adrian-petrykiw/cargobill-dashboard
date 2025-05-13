@@ -456,29 +456,29 @@ export default function ProfileTab() {
             </Form>
           ) : (
             <div className="divide-y">
-              <div className="grid grid-cols-2 py-2 px-6">
+              <div className="grid grid-cols-2 pb-2 px-6">
                 <div className="text-sm text-gray-500">Email address</div>
                 <div className="text-sm">{getEmail()}</div>
               </div>
 
               <div className="grid grid-cols-2 py-2 px-6">
                 <div className="text-sm text-gray-500">First Name</div>
-                <div className="text-sm">{profile?.first_name || 'Not provided'}</div>
+                <div className="text-sm">{profile?.first_name || '-'}</div>
               </div>
 
               <div className="grid grid-cols-2 py-2 px-6">
                 <div className="text-sm text-gray-500">Last Name</div>
-                <div className="text-sm">{profile?.last_name || 'Not provided'}</div>
+                <div className="text-sm">{profile?.last_name || '-'}</div>
               </div>
 
               <div className="grid grid-cols-2 py-2 px-6">
                 <div className="text-sm text-gray-500">Phone number</div>
-                <div className="text-sm">{profile?.phone_number || 'Not provided'}</div>
+                <div className="text-sm">{profile?.phone_number || '-'}</div>
               </div>
 
               <div className="grid grid-cols-2 py-2 px-6">
                 <div className="text-sm text-gray-500">Timezone</div>
-                <div className="text-sm">{profile?.timezone || 'Not provided'}</div>
+                <div className="text-sm">{profile?.timezone || '-'}</div>
               </div>
 
               <div className="grid grid-cols-2 py-2 px-6">
@@ -496,12 +496,12 @@ export default function ProfileTab() {
                         getCountryName(profile.primary_address.country)}
                     </>
                   ) : (
-                    'Not provided'
+                    '-'
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 py-2 px-6">
+              <div className="grid grid-cols-2 pt-2 px-6">
                 <div className="text-sm text-gray-500">Mailing Address</div>
                 <div className="text-sm">
                   {profile?.mailing_address?.street1 ? (
@@ -516,7 +516,7 @@ export default function ProfileTab() {
                         getCountryName(profile.mailing_address.country)}
                     </>
                   ) : (
-                    'Not provided'
+                    '-'
                   )}
                 </div>
               </div>
