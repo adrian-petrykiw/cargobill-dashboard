@@ -136,9 +136,19 @@ export default function Dashboard() {
           <Card className="shadow-sm">
             <CardHeader className="pb-0">
               <div className="flex items-between justify-between">
-                <h2 className="text-md font-medium">Business Wallet (...3sw6)</h2>
+                <h2 className="text-md font-medium">Business Wallet</h2>
                 <div className="flex space-x-2">
-                  <Button variant="link" className="text-xs p-0 h-auto">
+                  <Button
+                    variant="link"
+                    className="text-xs p-0 h-auto"
+                    onClick={() => {
+                      toast.error(`Please complete business verification`, {
+                        duration: 3000,
+                        position: 'top-center',
+                        icon: '🔒',
+                      });
+                    }}
+                  >
                     Deposit +
                   </Button>
                   <Button variant="link" className="text-xs p-0 h-auto">
@@ -150,21 +160,21 @@ export default function Dashboard() {
             <CardContent>
               <div className="mb-2">
                 <div className="text-xs text-gray-500">Total Balance</div>
-                <div className="text-lg font-semibold">$800,003.34 USD</div>
+                <div className="text-lg font-semibold">$0.00 USD</div>
               </div>
               <div className="aspect-[16/6] w-full mb-0">
                 {/* Placeholder for chart */}
                 <div className="aspect-[12/3] bg-gray-100 border-gray-200 border-[1px] rounded-md mb-2"></div>
 
                 <div className="flex justify-between space-x-2 p-1 bg-white border-gray-200 border-[1px] rounded-md">
-                  <Badge className="w-[100%] text-[10px] bg-blue-500 text-white hover:bg-blue-600 py-1 rounded-sm hover:cursor-pointer">
-                    $350,001.10 USDC
+                  <Badge className="w-[100%] justify-center text-[10px] bg-slate-900 text-white hover:bg-slate-800 py-1 rounded-sm hover:cursor-pointer">
+                    0.00 USDC
                   </Badge>
-                  <Badge className="w-[100%] text-[10px] bg-green-500 text-white hover:bg-green-600 py-1 rounded-sm hover:cursor-pointer">
-                    $250,001.12 USDT
+                  <Badge className="w-[100%] justify-center text-[10px] bg-slate-900 text-white hover:bg-slate-800 py-1 rounded-sm hover:cursor-pointer">
+                    0.00 USDT
                   </Badge>
-                  <Badge className="w-[100%] text-[10px] bg-purple-500 text-white hover:bg-purple-600 py-1 rounded-sm hover:cursor-pointer">
-                    $200,001.12 EURC
+                  <Badge className="w-[100%] justify-center text-[10px] bg-slate-900 text-white hover:bg-slate-800 py-1 rounded-sm hover:cursor-pointer">
+                    0.00 EURC
                   </Badge>
                 </div>
               </div>
@@ -175,18 +185,25 @@ export default function Dashboard() {
           <Card className="shadow-sm">
             <CardHeader className="pb-0">
               <div className="flex items-between justify-between">
-                <h2 className="text-md font-medium">Volume</h2>
-                <div className="text-xs text-gray-500">Period: 6M</div>
+                <h2 className="text-md font-medium">Cash Flow</h2>
+                <div className="text-xs text-gray-500">Period: Last Month</div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="mb-2">
-                <div className="text-xs text-gray-500">Total Volume</div>
-                <div className="text-lg font-semibold">$35,005.32 USD</div>
+              <div className="mb-2 flex flex-row justify-between">
+                <div>
+                  <div className="text-xs text-gray-500">Money In</div>
+                  <div className="text-lg font-semibold">$0.00 USD</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Money Out</div>
+                  <div className="text-lg font-semibold">$0.00 USD</div>
+                </div>
               </div>
+
               <div className="aspect-[16/6] w-full bg-gray-100 rounded-md mb-0">
                 {/* Placeholder for chart */}
-                <div className="text-xs text-gray-500"># of Transactions: 1,024</div>
+                {/* <div className="text-xs text-gray-500"># of Transactions: 1,024</div> */}
               </div>
             </CardContent>
           </Card>
@@ -205,12 +222,13 @@ export default function Dashboard() {
               <div className="mb-2">
                 <div className="text-xs text-gray-500">Total Yield</div>
                 <div className="text-lg font-semibold">
-                  $105.32 USD <span className="text-green-500 text-xs">+ 4.34%</span>
+                  $0.00 USD
+                  <span className="text-green-500 text-xs">+0.00%</span>
                 </div>
               </div>
               <div className="aspect-[16/6] w-full bg-gray-100 rounded-md mb-0">
                 {/* Placeholder for chart */}
-                <div className="text-xs text-green-500">+ 5.94% $13.34 USD</div>
+                {/* <div className="text-xs text-green-500">+ 5.94% $13.34 USD</div> */}
               </div>
             </CardContent>
           </Card>
@@ -225,7 +243,7 @@ export default function Dashboard() {
             </Button>
           </div>
 
-          <Card className="p-0 overflow-hidden shadow-sm">
+          {/* <Card className="p-0 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-gray-50">
@@ -328,7 +346,7 @@ export default function Dashboard() {
                 </TableBody>
               </Table>
             </div>
-          </Card>
+          </Card> */}
         </div>
       </div>
 
