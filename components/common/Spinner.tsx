@@ -1,16 +1,34 @@
-// components/Spinner.tsx
+// components/common/Spinner.tsx
 import React from 'react';
 
 interface SpinnerProps {
-  size?: string | number;
+  size?: 'sm' | 'md' | 'lg' | string | number;
   color?: string;
   className?: string;
+  breathingEffect?: boolean;
 }
 
-const Spinner: React.FC<SpinnerProps> = ({ size = '2rem', color = '#3b82f6', className = '' }) => {
+const Spinner: React.FC<SpinnerProps> = ({
+  size = 'md',
+  color = '#3b82f6',
+  className = '',
+  breathingEffect = true,
+}) => {
+  // Convert named sizes to actual dimensions
+  const sizeMap = {
+    sm: '1.5rem',
+    md: '2rem',
+    lg: '3rem',
+  };
+
+  const actualSize = sizeMap[size as keyof typeof sizeMap] || size;
+
   return (
-    <div className={`relative ${className}`} style={{ width: size, height: size }}>
-      <svg className="animate-spin h-full w-full" viewBox="0 0 100 100">
+    <div className={`relative ${className}`} style={{ width: actualSize, height: actualSize }}>
+      <svg
+        className={`${breathingEffect ? 'animate-spin-breath' : 'animate-spin'} h-full w-full`}
+        viewBox="0 0 100 100"
+      >
         <circle
           cx="50"
           cy="50"
@@ -19,8 +37,9 @@ const Spinner: React.FC<SpinnerProps> = ({ size = '2rem', color = '#3b82f6', cla
           stroke={color}
           strokeWidth="8"
           strokeLinecap="round"
-          strokeDasharray="180 180"
+          strokeDasharray={breathingEffect ? '120 240' : '180 180'}
           strokeDashoffset="45"
+          className={breathingEffect ? 'animate-dash-breathing' : ''}
         />
       </svg>
     </div>
