@@ -192,9 +192,7 @@ export default function LinkedAccountsTab() {
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Add Payment Method</DialogTitle>
-            <DialogDescription>
-              Link a payment method to your account for sending and receiving payments.
-            </DialogDescription>
+            <DialogDescription>Link a payment method to your account</DialogDescription>
           </DialogHeader>
 
           <Tabs value={paymentMethodTab} onValueChange={setPaymentMethodTab}>
