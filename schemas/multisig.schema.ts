@@ -12,9 +12,3 @@ export const createOrgWithMultisigSchema = z.object({
 });
 
 export type CreateOrgWithMultisigRequest = z.infer<typeof createOrgWithMultisigSchema>;
-
-export const squadsMultisigSchema = z.object({
-  // TODO: Add Squads protocol specific fields here
-});
-
-export type SquadsMultisig = z.infer<typeof squadsMultisigSchema>;

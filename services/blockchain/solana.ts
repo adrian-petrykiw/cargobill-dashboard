@@ -12,6 +12,8 @@ import {
 } from '@solana/web3.js';
 import { getAccount, TokenAccountNotFoundError, Account } from '@solana/spl-token';
 import bs58 from 'bs58';
+import { ConnectedSolanaWallet, PrivyClient } from '@privy-io/react-auth';
+import { SolanaStandardWallet } from '@privy-io/react-auth/solana';
 
 // Type guard to check if a transaction is a VersionedTransaction
 function isVersionedTransaction(
@@ -160,7 +162,7 @@ export class SolanaService {
    */
   async signAndSendTransaction(
     serializedTransaction: string,
-    privyWallet: any,
+    privyWallet: ConnectedSolanaWallet,
     options: {
       commitment?: Commitment;
       maxRetries?: number;
@@ -186,9 +188,18 @@ export class SolanaService {
 
     console.log('Starting transaction signing process with Privy wallet');
 
-    // Log transaction details for debugging
-    // this.logTransactionDetails(serializedTransaction, 'base64');
+    console.log('TRANSACTION ANALYSIS BEFORE SIGNING:');
+    this.logTransactionInfo(serializedTransaction);
 
+    // Check if the user's wallet is in the required signers
+    const { missingSigners } = this.analyzeTransactionSigners(serializedTransaction);
+    const userWalletPubkey = privyWallet.address;
+
+    if (userWalletPubkey && !missingSigners.includes(userWalletPubkey)) {
+      console.warn(`User wallet ${userWalletPubkey} is NOT in the list of required signers!`);
+    } else if (userWalletPubkey) {
+      console.log(`User wallet ${userWalletPubkey} IS in the list of required signers.`);
+    }
     try {
       // First try the direct wallet.sendTransaction method (should work for most cases)
       try {
@@ -201,19 +212,33 @@ export class SolanaService {
         // console.log('Transaction in bs58 format (for explorer):', bs58Tx);
 
         const recoveredTransaction = Transaction.from(bs58.decode(serializedTransaction));
+
         console.log(
           'MADE IT HERE 1: Transaction in base64 format (for explorer): ',
           Buffer.from(recoveredTransaction.serializeMessage()).toString('base64'),
         );
 
-        const signedTransaction = await privyWallet.signTransaction(
-          recoveredTransaction,
-          this.connection,
+        console.log(
+          'Recovered transaction required signers:',
+          recoveredTransaction.signatures.map(
+            (sig) =>
+              `${sig.publicKey.toBase58()} - ${sig.signature !== null ? 'signed' : 'unsigned'}`,
+          ),
         );
+
+        const signedTransaction = await privyWallet.signTransaction(recoveredTransaction);
 
         console.log(
           'MADE IT HERE 2: Transaction in base64 format (for explorer): ',
           Buffer.from(signedTransaction.serializeMessage()).toString('base64'),
+        );
+
+        console.log(
+          'After signing, transaction signatures:',
+          (signedTransaction as Transaction).signatures.map(
+            (sig) =>
+              `${sig.publicKey.toBase58()} - ${sig.signature !== null ? 'signed' : 'unsigned'}`,
+          ),
         );
 
         // Directly use the wallet's sendTransaction method (compatible with web3.js v1)
@@ -528,6 +553,90 @@ export class SolanaService {
     } catch (error) {
       console.error('Error fetching balance:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Analyze a transaction's signature requirements
+   */
+  analyzeTransactionSigners(serializedTransaction: string): {
+    requiredSigners: string[];
+    presentSigners: string[];
+    missingSigners: string[];
+  } {
+    try {
+      // Decode transaction
+      const txBuffer = bs58.decode(serializedTransaction);
+      const transaction = Transaction.from(txBuffer);
+
+      // Get all required signers (where publicKey is set but signature is null)
+      const requiredSigners = transaction.signatures.map((sig) => ({
+        pubkey: sig.publicKey.toBase58(),
+        isSigned: sig.signature !== null,
+      }));
+
+      // Log all signers info
+      console.log(
+        'Transaction signature info:',
+        requiredSigners.map((s) => `${s.pubkey} - ${s.isSigned ? 'signed' : 'unsigned'}`),
+      );
+
+      // Split into signed and unsigned
+      const presentSigners = requiredSigners.filter((s) => s.isSigned).map((s) => s.pubkey);
+
+      const missingSigners = requiredSigners.filter((s) => !s.isSigned).map((s) => s.pubkey);
+
+      return {
+        requiredSigners: requiredSigners.map((s) => s.pubkey),
+        presentSigners,
+        missingSigners,
+      };
+    } catch (error) {
+      console.error('Error analyzing transaction signers:', error);
+      return {
+        requiredSigners: [],
+        presentSigners: [],
+        missingSigners: [],
+      };
+    }
+  }
+
+  /**
+   * Log detailed information about a transaction
+   */
+  logTransactionInfo(serializedTransaction: string): void {
+    try {
+      // Decode transaction
+      const txBuffer = bs58.decode(serializedTransaction);
+      const transaction = Transaction.from(txBuffer);
+
+      // Basic info
+      console.log('Transaction Info:');
+      console.log('- Fee Payer:', transaction.feePayer?.toBase58() || 'Not set');
+      console.log('- Recent Blockhash:', transaction.recentBlockhash || 'Not set');
+
+      // Get instruction details
+      console.log('- Instructions:', transaction.instructions.length);
+      transaction.instructions.forEach((ix, i) => {
+        console.log(`  Instruction #${i + 1}:`);
+        console.log(`  - Program ID: ${ix.programId.toBase58()}`);
+        console.log(`  - Data length: ${ix.data.length} bytes`);
+        console.log(
+          `  - Accounts:`,
+          ix.keys.map(
+            (k) =>
+              `${k.pubkey.toBase58()} (${k.isSigner ? 'signer' : 'not-signer'}, ${k.isWritable ? 'writable' : 'read-only'})`,
+          ),
+        );
+      });
+
+      // Signature analysis
+      const signerAnalysis = this.analyzeTransactionSigners(serializedTransaction);
+      console.log('- Required Signers:', signerAnalysis.requiredSigners);
+      console.log('- Already Signed By:', signerAnalysis.presentSigners);
+      console.log('- Still Needs Signatures From:', signerAnalysis.missingSigners);
+    } catch (error) {
+      console.error('Error logging transaction info:', error);
     }
   }
 }

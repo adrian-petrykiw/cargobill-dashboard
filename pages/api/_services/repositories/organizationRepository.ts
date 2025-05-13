@@ -9,7 +9,6 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/db/supabase';
 
 export const organizationRepository = {
-  // API operations (uses admin client for backend security)
   async isUserInAnyOrganization(userId: string): Promise<boolean> {
     const { data, error } = await supabaseAdmin
       .from('organization_members')
@@ -23,7 +22,6 @@ export const organizationRepository = {
     return (data || []).length > 0;
   },
 
-  // System-level operations (unchanged)
   async getByIdSystem(id: string): Promise<Organization> {
     const { data, error } = await supabaseAdmin
       .from('organizations')
@@ -37,7 +35,6 @@ export const organizationRepository = {
     return data;
   },
 
-  // API operations (now uses admin client)
   async getById(id: string): Promise<Organization> {
     const { data, error } = await supabaseAdmin
       .from('organizations')
@@ -80,9 +77,30 @@ export const organizationRepository = {
         throw new Error('User is already a member of an organization');
       }
 
-      const validData = createOrganizationSchema.parse({
+      console.log('Creating organization with data:', {
         ...organizationData,
-        verification_status: 'pending',
+        operational_wallet: organizationData.operational_wallet
+          ? {
+              type: organizationData.operational_wallet.type,
+              status: organizationData.operational_wallet.status,
+              address: organizationData.operational_wallet.address?.substring(0, 8) + '...',
+              create_key: organizationData.operational_wallet.create_key?.substring(0, 8) + '...',
+            }
+          : null,
+      });
+
+      const validData = createOrganizationSchema.parse(organizationData);
+
+      console.log('Validated organization data:', {
+        ...validData,
+        operational_wallet: validData.operational_wallet
+          ? {
+              type: validData.operational_wallet.type,
+              status: validData.operational_wallet.status,
+              address: validData.operational_wallet.address?.substring(0, 8) + '...',
+              create_key: validData.operational_wallet.create_key?.substring(0, 8) + '...',
+            }
+          : null,
       });
 
       const { data, error } = await supabaseAdmin
@@ -104,6 +122,11 @@ export const organizationRepository = {
         status: 'active',
       });
 
+      console.log('User added as organization owner:', {
+        userId,
+        organizationId: data.id,
+      });
+
       return data;
     } catch (error) {
       if (error instanceof Error) {
@@ -115,13 +138,11 @@ export const organizationRepository = {
 
   async update(id: string, organizationData: any): Promise<Organization> {
     try {
-      // Validate with Zod
       const validData = updateOrganizationSchema.parse({
         id,
         ...organizationData,
       });
 
-      // Use admin client for backend operations
       const { data, error } = await supabaseAdmin
         .from('organizations')
         .update(validData)
@@ -148,13 +169,11 @@ export const organizationRepository = {
   },
 
   async addMember(organizationId: string, userId: string, role: string): Promise<void> {
-    // Check if user is already in an organization
     const isAlreadyInOrg = await this.isUserInAnyOrganization(userId);
     if (isAlreadyInOrg) {
       throw new Error('User is already a member of an organization');
     }
 
-    // Use admin client for backend operations
     const { error } = await supabaseAdmin.from('organization_members').insert({
       organization_id: organizationId,
       user_id: userId,
@@ -188,52 +207,5 @@ export const organizationRepository = {
     if (error) throw new Error(`Failed to get members: ${error.message}`);
 
     return data || [];
-  },
-
-  async createSystem(organizationData: any, userId: string): Promise<Organization> {
-    try {
-      // Check if user is already in an organization
-      const { data: existingMemberships } = await supabaseAdmin
-        .from('organization_members')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .limit(1);
-
-      if (existingMemberships && existingMemberships.length > 0) {
-        throw new Error('User is already a member of an organization');
-      }
-
-      const validData = createOrganizationSchema.parse({
-        ...organizationData,
-        verification_status: 'pending',
-      });
-
-      const { data, error } = await supabaseAdmin
-        .from('organizations')
-        .insert({
-          ...validData,
-          created_by: userId,
-        })
-        .select()
-        .single();
-
-      if (error) throw new Error(`Failed to create organization: ${error.message}`);
-      if (!data) throw new Error('Failed to retrieve created organization');
-
-      await supabaseAdmin.from('organization_members').insert({
-        organization_id: data.id,
-        user_id: userId,
-        role: 'owner',
-        status: 'active',
-      });
-
-      return data;
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(`Failed to create organization: ${String(error)}`);
-    }
   },
 };

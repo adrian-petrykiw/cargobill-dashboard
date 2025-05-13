@@ -83,7 +83,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         data: {
           organizationData,
           multisigData: {
-            serializedTransaction: multisigTxData.serializedTransaction,
+            signature: multisigTxData.signature, // Now using signature instead of serializedTransaction
             multisigPda: multisigTxData.multisigPda,
             createKey: multisigTxData.createKey,
             blockhash: multisigTxData.blockhash,

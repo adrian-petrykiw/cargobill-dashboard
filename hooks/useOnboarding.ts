@@ -11,14 +11,11 @@ import { useUserStore } from '@/stores/userStore';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { OnboardingOrganizationRequest } from '@/schemas/organization.schema';
 import toast from 'react-hot-toast';
-import { Transaction } from '@solana/web3.js';
+import { Transaction, PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 export function useOnboarding() {
   const { wallets, ready } = useSolanaWallets();
-  // const { sendTransaction } = useSendTransaction();
-  // const { signTransaction } = useSignTransaction();
-
   const user = useUserStore((state) => state.user);
   const setBusinessVerified = useOnboardingStore((state) => state.setBusinessVerified);
 
@@ -34,67 +31,46 @@ export function useOnboarding() {
         throw new Error('No embedded wallet found');
       }
 
-      // Prepare multisig transaction (doesn't create org yet)
+      console.log('User wallet address:', embeddedWallet.address);
+
+      // Create multisig transaction (doesn't create org yet)
       let result;
       try {
-        console.log('Creating organization transaction with data:', organizationData);
-        console.log('MADE IT TO 0.1');
+        console.log('Creating organization with data:', organizationData);
 
         result = await organizationApi.createOrganizationTransaction(organizationData);
-        console.log('MADE IT TO 0.2');
-        console.log('Received transaction data:', {
-          multisigPda: result.multisigData.multisigPda,
-          createKey: result.multisigData.createKey,
-          serializedTxPreview: `${result.multisigData.serializedTransaction.substring(0, 50)}...`,
-        });
-
-        console.log('MADE IT TO 0.3');
-      } catch (error) {
-        console.error('Failed to create organization transaction:', error);
-        if (error instanceof Error) {
-          throw new Error(error.message);
-        }
-        throw new Error('Failed to prepare organization transaction. Please try again.');
-      }
-
-      // Sign and send the transaction using our centralized solanaService
-      let transactionResult;
-      try {
-        transactionResult = await solanaService.signAndSendTransaction(
-          result.multisigData.serializedTransaction,
-          embeddedWallet,
-          {
-            commitment: 'confirmed',
-            maxRetries: 5,
-            timeout: 60000,
-          },
+        console.log(
+          'Transaction successfully submitted with signature:',
+          result.multisigData.signature,
         );
+
+        // Verify transaction confirmation
+        const status = await solanaService.confirmTransactionWithRetry(
+          result.multisigData.signature,
+          'confirmed',
+          5,
+          60000,
+        );
+
+        if (!status || status.err) {
+          console.error('Transaction confirmation failed:', status?.err);
+          throw new Error('Transaction failed to confirm on the blockchain. Please try again.');
+        }
+
+        console.log('Transaction confirmed on client side');
       } catch (error) {
-        console.error('Transaction signing failed:', error);
+        console.error('Failed to create or confirm organization transaction:', error);
         if (error instanceof Error) {
-          if (error.message.includes('User rejected')) {
-            throw new Error(
-              'Transaction was rejected. Please approve the transaction to continue.',
-            );
-          }
           throw new Error(error.message);
         }
-        throw new Error('Failed to sign transaction. Please try again.');
-      }
-
-      const { signature, status } = transactionResult;
-
-      // Verify transaction was confirmed
-      if (!status || status.err) {
-        console.error('Transaction confirmation failed:', status?.err);
-        throw new Error('Transaction failed to confirm on the blockchain. Please try again.');
+        throw new Error('Failed to prepare or confirm organization transaction. Please try again.');
       }
 
       // Complete the registration by creating the organization
       try {
         const completedOrganization = await organizationApi.completeOrganizationRegistration(
           result.organizationData,
-          signature,
+          result.multisigData.signature,
           result.multisigData.multisigPda,
           result.multisigData.createKey,
         );
@@ -158,7 +134,6 @@ export function useOnboarding() {
   });
 
   return {
-    // Changed this line to use mutateAsync instead of mutate
     createOrganization: createOrganizationMutation.mutateAsync,
     isCreating: createOrganizationMutation.isPending,
     existingOrganization: checkExistingOrganization.data,

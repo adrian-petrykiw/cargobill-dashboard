@@ -347,7 +347,59 @@ export async function getBalance(address: string, commitment: web3.Commitment = 
   }
 }
 
-// Export all functions
+// Confirm a transaction with retry logic
+export async function confirmTransactionWithRetry(
+  signature: string,
+  commitment: web3.Commitment = 'confirmed',
+  maxRetries: number = 10,
+  timeoutMs: number = 60000,
+): Promise<web3.SignatureStatus | null> {
+  const startTime = Date.now();
+  let retryCount = 0;
+
+  while (retryCount < maxRetries && Date.now() - startTime < timeoutMs) {
+    try {
+      console.log(`Confirmation attempt ${retryCount + 1} for ${signature}`);
+
+      const response = await connection.getSignatureStatuses([signature]);
+      const status = response.value[0];
+
+      if (status) {
+        if (status.err) {
+          throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+        }
+
+        if (commitment === 'confirmed' && status.confirmations) {
+          console.log(`Transaction confirmed with ${status.confirmations} confirmations`);
+          return status;
+        }
+
+        if (commitment === 'finalized' && status.confirmationStatus === 'finalized') {
+          console.log('Transaction finalized');
+          return status;
+        }
+      }
+
+      console.log('Waiting before next confirmation check...');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      retryCount++;
+    } catch (error) {
+      console.error(`Confirmation attempt ${retryCount + 1} failed:`, error);
+      retryCount++;
+
+      if (retryCount < maxRetries) {
+        const delay = 2000 * Math.pow(2, retryCount - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  console.error(
+    `Failed to confirm transaction after ${maxRetries} attempts or ${timeoutMs}ms timeout`,
+  );
+  return null;
+}
+
 export const solanaService = {
   connection,
   createTransferTransaction,
@@ -358,6 +410,7 @@ export const solanaService = {
   sendTransaction,
   getAccountInfo,
   getBalance,
+  confirmTransactionWithRetry,
   // If fee payer is available, export its public key
   feePayerPublicKey: FEE_PAYER_KEYPAIR ? FEE_PAYER_KEYPAIR.publicKey.toBase58() : null,
 };

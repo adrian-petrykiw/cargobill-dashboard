@@ -75,7 +75,7 @@ function LocalPrivyProvider({ children }: { children: React.ReactNode }) {
         },
 
         mfa: {
-          noPromptOnMfaRequired: true,
+          noPromptOnMfaRequired: false,
         },
 
         // Configure Solana clusters properly

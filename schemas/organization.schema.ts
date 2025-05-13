@@ -2,10 +2,13 @@
 import { z } from 'zod';
 import { jsonSchema } from './common';
 
+// Define ISO country code validation for consistency
+const iso3CountryCode = z.string().length(3, 'Country code must be 3 characters');
+
 export const organizationSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100),
-  country: z.string().min(2).max(2),
+  country: iso3CountryCode,
   business_details: jsonSchema,
   entity_type: z.string(),
   account_status: z.string().nullable().optional(),
@@ -38,23 +41,21 @@ export const createOrganizationSchema = organizationSchema
     id: true,
     created_at: true,
     created_by: true,
-    verification_status: true,
     updated_at: true,
-    account_status: true,
     data_vault_id: true,
     global_organization_id: true,
     invited_at: true,
     invited_by: true,
     last_verified_at: true,
-    operational_wallet: true,
     treasury_wallet: true,
     verification_provider: true,
     yield_wallet: true,
   })
   .extend({
-    verification_status: z.literal('pending'),
+    verification_status: z.enum(['unverified']),
     subscription_tier: z.string().default('free'),
-    entity_type: z.string().default('business'),
+    entity_type: z.string().default('standalone'),
+    account_status: z.string().default('active'),
   });
 
 export type CreateOrganizationRequest = z.infer<typeof createOrganizationSchema>;
@@ -73,7 +74,7 @@ export type UpdateOrganizationRequest = z.infer<typeof updateOrganizationSchema>
 
 export const onboardingOrganizationSchema = z.object({
   business_name: z.string().min(1, 'Business name is required'),
-  country: z.string().min(2, 'Country is required'),
+  country: iso3CountryCode,
   business_email: z.string().email('Valid business email required'),
 });
 

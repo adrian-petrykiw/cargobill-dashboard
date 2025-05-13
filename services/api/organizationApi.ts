@@ -16,7 +16,6 @@ export const organizationApi = {
       return data.data || [];
     } catch (error) {
       console.error('Error fetching organizations:', error);
-
       // Special handling for new users
       if (
         axios.isAxiosError(error) &&
@@ -26,7 +25,6 @@ export const organizationApi = {
         console.warn('User registration may not have propagated yet, returning empty list');
         return [];
       }
-
       if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
         throw new Error(error.response.data.error.message);
       }
@@ -57,7 +55,7 @@ export const organizationApi = {
   async createOrganizationTransaction(organization: OnboardingOrganizationRequest): Promise<{
     organizationData: OnboardingOrganizationRequest;
     multisigData: {
-      serializedTransaction: string;
+      signature: string; // Changed from serializedTransaction to signature
       multisigPda: string;
       createKey: string;
       blockhash: string;

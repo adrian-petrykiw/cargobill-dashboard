@@ -176,7 +176,7 @@ export function OrganizationSetupModal({
                           <TooltipContent align="end" className="max-w-[260px] text-xs">
                             <p>
                               Select the country where this office is located. If you have offices
-                              in multiple countries register each office as a separate organization
+                              in multiple countries register each office as a seperate organization
                             </p>
                           </TooltipContent>
                         </Tooltip>

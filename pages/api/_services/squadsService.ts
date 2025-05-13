@@ -31,7 +31,7 @@ export interface CreateMultisigParams {
 export interface MultisigTransactionResult {
   multisigPda: string;
   createKey: string;
-  serializedTransaction: string;
+  signature: string;
   blockhash: string;
   lastValidBlockHeight: number;
 }
@@ -93,7 +93,10 @@ export const squadsService = {
     }
 
     const userPublicKey = new PublicKey(params.userWalletAddress);
-    const createKey = userPublicKey;
+
+    // Random keypair
+    const createKeypair = Keypair.generate();
+    const createKey = createKeypair.publicKey;
 
     // Generate PDAs
     let multisigPda: PublicKey;
@@ -129,9 +132,9 @@ export const squadsService = {
     let createIx;
     try {
       createIx = multisig.instructions.multisigCreateV2({
-        createKey,
+        treasury: programConfig.treasury,
         creator: feePayer.publicKey,
-        multisigPda,
+        multisigPda: multisigPda,
         configAuthority: null,
         threshold: 1,
         members: [
@@ -141,8 +144,8 @@ export const squadsService = {
           },
         ],
         timeLock: 0,
-        treasury: programConfig.treasury,
         rentCollector: null,
+        createKey: createKey,
       });
     } catch (error) {
       throw new SquadsServiceError(
@@ -184,8 +187,8 @@ export const squadsService = {
       });
     }
 
-    // Create and sign transaction
-    let serializedTransaction;
+    // Create, sign, and send transaction
+    let signature;
     try {
       const transaction = new Transaction();
       // transaction.add(...computeBudgetIx, ...instructions);
@@ -193,16 +196,70 @@ export const squadsService = {
       transaction.feePayer = feePayer.publicKey;
       transaction.recentBlockhash = blockhashInfo.blockhash;
 
-      // Sign with fee payer only
+      // Log all required signers before signing
+      console.log(
+        'Required signers BEFORE signing:',
+        transaction.signatures.map(
+          (sig) => `${sig.publicKey.toBase58()} - ${sig.signature ? 'Signed' : 'Unsigned'}`,
+        ),
+      );
+
+      // Sign with createKey and feePayer
+      transaction.partialSign(createKeypair);
       transaction.partialSign(feePayer);
 
-      serializedTransaction = transaction.serialize({
-        requireAllSignatures: false,
+      // Log all required signers after signing to verify
+      console.log(
+        'Required signers AFTER signing:',
+        transaction.signatures.map(
+          (sig) => `${sig.publicKey.toBase58()} - ${sig.signature ? 'Signed' : 'Unsigned'}`,
+        ),
+      );
+
+      // Check if there are any remaining unsigned signers
+      const unsignedSigners = transaction.signatures
+        .filter((sig) => sig.signature === null)
+        .map((sig) => sig.publicKey.toBase58());
+
+      if (unsignedSigners.length > 0) {
+        console.warn('Transaction still has unsigned signers:', unsignedSigners);
+        throw new SquadsServiceError(
+          'MISSING_SIGNATURES',
+          `Transaction still requires signatures from: ${unsignedSigners.join(', ')}`,
+          { unsignedSigners },
+        );
+      }
+
+      // Submit transaction directly from server
+      signature = await connection.sendRawTransaction(transaction.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
       });
+
+      console.log('Transaction submitted with signature:', signature);
+
+      // Wait for confirmation
+      const confirmationResult = await connection.confirmTransaction(
+        {
+          signature,
+          blockhash: blockhashInfo.blockhash,
+          lastValidBlockHeight: blockhashInfo.lastValidBlockHeight,
+        },
+        'confirmed',
+      );
+
+      if (confirmationResult.value.err) {
+        throw new Error(
+          `Transaction confirmed but failed: ${JSON.stringify(confirmationResult.value.err)}`,
+        );
+      }
+
+      console.log('Transaction confirmed successfully');
     } catch (error) {
+      console.error('Transaction submission failed:', error);
       throw new SquadsServiceError(
-        'TRANSACTION_CREATION_FAILED',
-        'Failed to create or sign transaction',
+        'TRANSACTION_SUBMISSION_FAILED',
+        'Failed to submit transaction',
         { originalError: error instanceof Error ? error.message : String(error) },
       );
     }
@@ -210,7 +267,7 @@ export const squadsService = {
     return {
       multisigPda: multisigPda.toBase58(),
       createKey: createKey.toBase58(),
-      serializedTransaction: bs58.encode(serializedTransaction),
+      signature, // Return signature instead of serializedTransaction
       blockhash: blockhashInfo.blockhash,
       lastValidBlockHeight: blockhashInfo.lastValidBlockHeight,
     };

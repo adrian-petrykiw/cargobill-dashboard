@@ -13,8 +13,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   try {
+    console.log('Processing multisig registration request:', {
+      userId: req.user.id,
+      endpoint: '/api/organizations/complete-multisig-registration',
+    });
+
     const result = createOrgWithMultisigSchema.safeParse(req.body);
     if (!result.success) {
+      console.error('Validation failed for multisig registration:', result.error.format());
       return res.status(400).json({
         success: false,
         error: {
@@ -27,20 +33,39 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const { organizationData, signature, multisigPda, createKey } = result.data;
 
-    // Create organization with minimal operational wallet data
+    console.log('Creating organization with multisig wallet:', {
+      businessName: organizationData.business_name,
+      country: organizationData.country,
+      multisigPda: multisigPda.substring(0, 8) + '...',
+      createKey: createKey.substring(0, 8) + '...',
+    });
+
     const organization = await organizationRepository.create(
       {
-        ...organizationData,
         name: organizationData.business_name,
+        business_details: {
+          email: organizationData.business_email,
+          phone: '',
+          website: '',
+        },
+        country: organizationData.country,
+        entity_type: 'standalone',
+        account_status: 'active',
+        verification_status: 'unverified',
+        subscription_tier: 'free',
         operational_wallet: {
           type: 'multisig',
           status: 'active',
           address: multisigPda,
           create_key: createKey,
+          signature: signature,
+          created_at: new Date().toISOString(),
         },
       },
       req.user.id,
     );
+
+    console.log('Organization successfully created with ID:', organization.id);
 
     return res.status(201).json({
       success: true,
@@ -48,6 +73,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     });
   } catch (error) {
     console.error('Failed to complete multisig registration:', error);
+
+    // Log detailed error information for debugging
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n'), // Truncate for readability
+      });
+    }
+
     return res.status(500).json(ApiError.internalServerError(error));
   }
 }
