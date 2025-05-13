@@ -13,6 +13,7 @@ import { Download } from 'lucide-react';
 import TransactionsTable from '@/features/transactions/components/TransactionsTable';
 import { Button } from '@/components/ui/button';
 import { dummyTransactions } from '@/constants/dummyTransactions';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Define filter options
 const statusOptions = [
@@ -169,7 +170,7 @@ export default function Transactions() {
         </div>
 
         {/* Transactions Table Section */}
-        <div className="border rounded-md overflow-hidden">
+        {/* <div className="border rounded-md overflow-hidden">
           <TransactionsTable
             transactions={filteredTransactions}
             onRowClick={handleRowClick}
@@ -177,7 +178,15 @@ export default function Transactions() {
             onCancel={handleCancel}
             onPay={handlePay}
           />
-        </div>
+        </div> */}
+
+        <Card>
+          <CardContent>
+            <div className="text-center py-16">
+              <p className="text-gray-400 text-xs">No transactions found </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </ProtectedLayout>
   );
