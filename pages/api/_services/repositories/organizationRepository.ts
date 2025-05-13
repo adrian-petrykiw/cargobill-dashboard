@@ -22,19 +22,6 @@ export const organizationRepository = {
     return (data || []).length > 0;
   },
 
-  async getByIdSystem(id: string): Promise<Organization> {
-    const { data, error } = await supabaseAdmin
-      .from('organizations')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) throw new Error(`Failed to get organization: ${error.message}`);
-    if (!data) throw new Error(`Organization not found: ${id}`);
-
-    return data;
-  },
-
   async getById(id: string): Promise<Organization> {
     const { data, error } = await supabaseAdmin
       .from('organizations')

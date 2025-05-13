@@ -79,7 +79,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       console.error('Error details:', {
         message: error.message,
         name: error.name,
-        stack: error.stack?.split('\n').slice(0, 3).join('\n'), // Truncate for readability
+        stack: error.stack?.split('\n').slice(0, 3).join('\n'),
       });
     }
 
