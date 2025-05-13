@@ -47,8 +47,12 @@ export function useOrganizations() {
     },
   });
 
+  // Get the primary organization (first in the list)
+  const organization = organizationsQuery.data?.[0] || null;
+
   return {
     organizations: organizationsQuery.data || ([] as Organization[]),
+    organization,
     isLoading: organizationsQuery.isLoading,
     error: organizationsQuery.error,
     updateOrganization: updateOrganizationMutation.mutate,

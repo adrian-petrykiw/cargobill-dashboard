@@ -2,74 +2,15 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useOnboardingStore } from '@/stores/onboardingStore';
-
-// Form schema for business verification
-const businessSchema = z.object({
-  legalName: z.string().min(1, 'Legal name is required'),
-  ein: z.string().min(1, 'EIN/Tax ID is required'),
-  businessType: z.string().min(1, 'Business type is required'),
-  address: z.string().min(1, 'Address is required'),
-  city: z.string().min(1, 'City is required'),
-  state: z.string().min(1, 'State is required'),
-  zipCode: z.string().min(1, 'ZIP code is required'),
-  country: z.string().min(1, 'Country is required'),
-  phone: z.string().min(1, 'Phone number is required'),
-  website: z.string().optional(),
-});
-
-type BusinessFormData = z.infer<typeof businessSchema>;
+import { useOrganizations } from '@/hooks/useOrganizations'; // Using the existing hook
+import VerificationForm from './VerificationForm';
 
 export default function OrganizationTab() {
-  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
   const { businessVerified, setBusinessVerified } = useOnboardingStore();
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<BusinessFormData>({
-    resolver: zodResolver(businessSchema),
-    defaultValues: {
-      legalName: '',
-      ein: '',
-      businessType: '',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: '',
-      phone: '',
-      website: '',
-    },
-  });
-
-  const onSubmit = async (data: BusinessFormData) => {
-    try {
-      // In a real implementation, you would save this data to your backend
-      console.log('Saving business verification data:', data);
-
-      // For demonstration, set the business verified flag
-      setBusinessVerified(true);
-
-      setIsVerificationModalOpen(false);
-    } catch (error) {
-      console.error('Error saving business verification:', error);
-    }
-  };
+  const { organization } = useOrganizations(); // Using the updated hook with organization property
 
   return (
     <div className="space-y-4">
@@ -82,7 +23,7 @@ export default function OrganizationTab() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Legal Name</h3>
-                <p>Illini Logistics LLC</p>
+                <p>{organization?.name || 'N/A'}</p>
               </div>
 
               <div>
@@ -185,98 +126,14 @@ export default function OrganizationTab() {
         </CardContent>
       </Card>
 
-      {/* Business Verification Modal */}
-      <Dialog open={isVerificationModalOpen} onOpenChange={setIsVerificationModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Business Verification</DialogTitle>
-            <DialogDescription>
-              Please provide your business details for verification. This information helps us
-              comply with regulations and protect your account.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="legalName">Legal Business Name</Label>
-                <Input id="legalName" {...register('legalName')} />
-                {errors.legalName && (
-                  <p className="text-sm text-red-500">{errors.legalName.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ein">EIN/Tax ID</Label>
-                <Input id="ein" {...register('ein')} />
-                {errors.ein && <p className="text-sm text-red-500">{errors.ein.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="businessType">Business Type</Label>
-                <Input id="businessType" {...register('businessType')} />
-                {errors.businessType && (
-                  <p className="text-sm text-red-500">{errors.businessType.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Input id="address" {...register('address')} />
-                {errors.address && <p className="text-sm text-red-500">{errors.address.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="city">City</Label>
-                <Input id="city" {...register('city')} />
-                {errors.city && <p className="text-sm text-red-500">{errors.city.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="state">State/Province</Label>
-                <Input id="state" {...register('state')} />
-                {errors.state && <p className="text-sm text-red-500">{errors.state.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="zipCode">ZIP/Postal Code</Label>
-                <Input id="zipCode" {...register('zipCode')} />
-                {errors.zipCode && <p className="text-sm text-red-500">{errors.zipCode.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="country">Country</Label>
-                <Input id="country" {...register('country')} />
-                {errors.country && <p className="text-sm text-red-500">{errors.country.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Business Phone</Label>
-                <Input id="phone" {...register('phone')} />
-                {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="website">Website (Optional)</Label>
-                <Input id="website" {...register('website')} />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setIsVerificationModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Submitting...' : 'Submit Verification'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Business Verification Dialog with VerificationForm component */}
+      {organization && (
+        <Dialog open={isVerificationModalOpen} onOpenChange={setIsVerificationModalOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] overflow-y-auto">
+            <VerificationForm organizationId={organization.id} />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
