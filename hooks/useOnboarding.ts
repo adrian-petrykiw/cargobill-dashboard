@@ -10,7 +10,7 @@ import { solanaService } from '@/services/blockchain/solana';
 import { useUserStore } from '@/stores/userStore';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { OnboardingOrganizationRequest } from '@/schemas/organization.schema';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Transaction, PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 

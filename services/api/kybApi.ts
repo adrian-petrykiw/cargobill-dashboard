@@ -18,7 +18,15 @@ interface VerificationInitiationRequest {
 
 // Verification status response
 interface VerificationStatusResponse {
-  status: 'pass' | 'fail' | 'pending' | 'pending_review' | 'none' | 'verified' | 'rejected';
+  status:
+    | 'pass'
+    | 'fail'
+    | 'pending'
+    | 'pending_review'
+    | 'none'
+    | 'verified'
+    | 'rejected'
+    | 'in_progress';
   requires_manual_review?: boolean;
   last_verified_at?: string | null;
   verification_provider?: string;

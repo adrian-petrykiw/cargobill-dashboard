@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { organizationApi } from '@/services/api/organizationApi';
 import type { Organization, UpdateOrganizationRequest } from '@/schemas/organization.schema';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 
 export function useOrganizations() {

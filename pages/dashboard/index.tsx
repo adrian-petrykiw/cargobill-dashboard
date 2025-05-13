@@ -18,6 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useOrganizations } from '@/hooks/useOrganizations';
 import { OrganizationSetupModal } from '@/components/onboarding/OnboardingSetupModal';
 import type { Organization } from '@/schemas/organization.schema';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const user = useUserStore((state) => state.user);
@@ -103,8 +104,28 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Overview</h1>
           <div className="flex space-x-3">
-            <Button className="min-w-[12rem] bg-tertiary hover:bg-blue-600">Send</Button>
-            <Button className="min-w-[12rem] bg-slate-900 text-white hover:bg-slate-800">
+            <Button
+              className="min-w-[12rem] bg-tertiary hover:bg-blue-600"
+              onClick={() => {
+                toast.error(`Please complete business verification`, {
+                  duration: 3000,
+                  position: 'top-center',
+                  icon: '🔒',
+                });
+              }}
+            >
+              Send
+            </Button>
+            <Button
+              className="min-w-[12rem] bg-slate-900 text-white hover:bg-slate-800"
+              onClick={() => {
+                toast.error(`Please complete business verification`, {
+                  duration: 3000,
+                  position: 'top-center',
+                  icon: '🔒',
+                });
+              }}
+            >
               Request
             </Button>
           </div>

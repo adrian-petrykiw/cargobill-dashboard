@@ -7,7 +7,7 @@ import { userApi } from '@/services/api/userApi';
 import { organizationApi } from '@/services/api/organizationApi'; // Add this import
 import { ROUTES } from '@/constants/routes';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import { useUserStore } from '@/stores/userStore';
 import { useOrganizationStore } from '@/stores/organizationStore'; // Add this import if implementing the store
 import { useState, useCallback } from 'react';
@@ -146,7 +146,7 @@ export default function useAuth() {
               }
             }
 
-            toast.success('Account created successfully!');
+            toast.success('Account created');
           } else {
             console.log('Logging in existing user');
             userData = await userApi.loginUser({
@@ -154,7 +154,7 @@ export default function useAuth() {
               email: email,
               wallet_address: user.wallet?.address || '',
             });
-            toast.success('Logged in successfully!');
+            toast.success('Logged in');
           }
 
           // Update local state with user data

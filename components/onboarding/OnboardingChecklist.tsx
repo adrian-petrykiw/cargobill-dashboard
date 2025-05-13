@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ROUTES } from '@/constants/routes';
 import { useOnboardingStore } from '@/stores/onboardingStore';
+import { toast } from 'sonner';
 
 interface OnboardingTaskProps {
   title: string;
@@ -70,17 +71,28 @@ export default function OnboardingChecklist() {
   const handleSendFirstPayment = () => {
     // This would open the send payment modal
     // For now, just navigate to dashboard
-    router.push(ROUTES.DASHBOARD);
+    // router.push(ROUTES.DASHBOARD);
     // In a real implementation, you would call some function to open the modal
     // openSendPaymentModal();
+
+    toast.error(`Please complete business verification`, {
+      duration: 3000,
+      position: 'top-center',
+      icon: '🔒',
+    });
   };
 
   const handleSharePaymentLink = () => {
     // This would open the payment request modal
     // For now, just navigate to dashboard
-    router.push(ROUTES.DASHBOARD);
+    // router.push(ROUTES.DASHBOARD);
     // In a real implementation, you would call some function to open the modal
     // openPaymentRequestModal();
+    toast.error(`Please complete business verification`, {
+      duration: 3000,
+      position: 'top-center',
+      icon: '🔒',
+    });
   };
 
   return (

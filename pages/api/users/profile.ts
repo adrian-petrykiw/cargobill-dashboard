@@ -11,11 +11,38 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   try {
     // GET: Retrieve current user profile
     if (req.method === 'GET') {
-      const profile = await userRepository.getById(req.user.id);
-      return res.status(200).json({
-        success: true,
-        data: profile,
-      });
+      try {
+        // Check if req.user exists and has an id
+        if (!req.user || !req.user.id) {
+          console.error('Auth middleware failed to set req.user or req.user.id');
+          return res.status(401).json({
+            success: false,
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'You must be logged in to access this resource',
+            },
+          });
+        }
+
+        const profile = await userRepository.getById(req.user.id);
+        return res.status(200).json({
+          success: true,
+          data: profile,
+        });
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        // If the error is "User not found", return a more specific error message
+        if (error instanceof Error && error.message.includes('User not found')) {
+          return res.status(404).json({
+            success: false,
+            error: {
+              code: 'USER_NOT_FOUND',
+              message: 'User profile not found',
+            },
+          });
+        }
+        return res.status(500).json(ApiError.internalServerError(error));
+      }
     }
 
     // PUT: Update user profile
@@ -54,6 +81,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withRateLimit(
-  (req, res) => withAuthMiddleware(handler, { validateWallet: true })(req, res),
+  (req, res) => withAuthMiddleware(handler, { validateWallet: false })(req, res),
   'standard',
 );

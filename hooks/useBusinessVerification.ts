@@ -2,11 +2,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { kybApi } from '@/services/api/kybApi';
-import {
-  DocumentType,
-  BusinessBasicInfoFormData,
-  VerificationStatusResponse,
-} from '@/schemas/kyb.schema';
+import { DocumentType, VerificationStatusResponse } from '@/schemas/kyb.schema';
 
 export interface UseBusinessVerificationProps {
   organizationId: string;
@@ -17,28 +13,26 @@ export interface DocumentStatus {
 }
 
 export function useBusinessVerification({ organizationId }: UseBusinessVerificationProps) {
-  const [currentStep, setCurrentStep] = useState<number>(0);
+  // Document upload status tracking
   const [documentStatus, setDocumentStatus] = useState<DocumentStatus>({
     [DocumentType.BUSINESS_FORMATION]: false,
     [DocumentType.BUSINESS_OWNERSHIP]: false,
     [DocumentType.PROOF_OF_ADDRESS]: false,
     [DocumentType.TAX_ID]: false,
-  });
-  const [ownersCount, setOwnersCount] = useState<number>(1);
-  const [ownersStatus, setOwnersStatus] = useState<boolean[]>([false]);
-
-  // Save basic info
-  const saveBasicInfoMutation = useMutation({
-    mutationFn: (formData: BusinessBasicInfoFormData) =>
-      kybApi.saveBasicInfo(organizationId, formData),
-    onSuccess: () => {
-      setCurrentStep(1);
-    },
+    ownerIdFront: false,
+    ownerIdBack: false,
+    ownerProofOfAddress: false,
+    // Country-specific documents can be added as needed
+    companyPanCard: false,
+    gstCertificate: false,
+    memorandumOfAssociation: false,
+    itrDocument: false,
+    shareholderRegistry: false,
   });
 
   // Get document token
   const getDocumentTokenMutation = useMutation({
-    mutationFn: ({ documentType, fields }: { documentType: DocumentType; fields: string[] }) =>
+    mutationFn: ({ documentType, fields }: { documentType: string; fields: string[] }) =>
       kybApi.getDocumentToken({
         organizationId,
         documentType,
@@ -56,12 +50,13 @@ export function useBusinessVerification({ organizationId }: UseBusinessVerificat
       }),
   });
 
-  // Initiate verification
+  // Initiate verification with support for form data
   const initiateVerificationMutation = useMutation({
-    mutationFn: (termsAccepted: boolean) =>
+    mutationFn: (params: { termsAccepted: boolean; formData?: Record<string, any> }) =>
       kybApi.initiateVerification({
         organizationId,
-        termsAccepted,
+        termsAccepted: params.termsAccepted,
+        formData: params.formData,
       }),
   });
 
@@ -73,44 +68,19 @@ export function useBusinessVerification({ organizationId }: UseBusinessVerificat
   });
 
   // Helper methods
-  const updateDocumentStatus = (documentType: DocumentType, isUploaded: boolean) => {
+  const updateDocumentStatus = (documentType: string, isUploaded: boolean) => {
     setDocumentStatus((prev) => ({
       ...prev,
       [documentType]: isUploaded,
     }));
   };
 
-  const updateOwnerStatus = (ownerIndex: number, isCompleted: boolean) => {
-    const newStatus = [...ownersStatus];
-    newStatus[ownerIndex] = isCompleted;
-    setOwnersStatus(newStatus);
-  };
-
-  const updateOwnersCount = (count: number) => {
-    setOwnersCount(count);
-    setOwnersStatus(Array(count).fill(false));
-  };
-
-  const isDocumentsStepComplete = (): boolean => {
-    return Object.values(documentStatus).every((status) => status === true);
-  };
-
-  const isOwnersStepComplete = (): boolean => {
-    return ownersStatus.length > 0 && ownersStatus.every((status) => status === true);
-  };
-
-  // Return values
+  // Return values - simplified for SimpleVerificationForm
   return {
     // State
-    currentStep,
     documentStatus,
-    ownersCount,
-    ownersStatus,
 
     // Mutations
-    saveBasicInfo: saveBasicInfoMutation.mutateAsync,
-    isSavingBasicInfo: saveBasicInfoMutation.isPending,
-
     getDocumentToken: getDocumentTokenMutation.mutateAsync,
     isGettingDocumentToken: getDocumentTokenMutation.isPending,
 
@@ -126,11 +96,6 @@ export function useBusinessVerification({ organizationId }: UseBusinessVerificat
     isLoadingStatus: verificationStatusQuery.isLoading,
 
     // Helper methods
-    setCurrentStep,
     updateDocumentStatus,
-    updateOwnerStatus,
-    updateOwnersCount,
-    isDocumentsStepComplete,
-    isOwnersStepComplete,
   };
 }

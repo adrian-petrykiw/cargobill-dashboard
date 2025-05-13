@@ -71,8 +71,90 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       });
     }
 
-    // Run KYB verification on the business
-    // Using Footprint's headless KYB API
+    // If form data was provided, update the organization first
+    if (req.body.formData) {
+      const formData = req.body.formData;
+
+      // Extract organization fields
+      const orgUpdateData: any = {};
+
+      // Map form data fields to database fields
+      if (formData['business.name']) orgUpdateData.name = formData['business.name'];
+      if (formData['business.website']) orgUpdateData.website = formData['business.website'];
+      if (formData['business.phone']) orgUpdateData.phone_number = formData['business.phone'];
+      if (formData['business.email']) orgUpdateData.email = formData['business.email'];
+      if (formData['business.description'])
+        orgUpdateData.description = formData['business.description'];
+
+      // Store other business fields as business_details JSON
+      // Fixed: Properly parse business_details from JSON if needed and create a new object
+      let businessDetails: Record<string, any> = {};
+
+      // Parse existing business_details if it exists
+      if (orgData.business_details) {
+        try {
+          // Handle if business_details is already an object or is a JSON string
+          if (typeof orgData.business_details === 'object') {
+            businessDetails = orgData.business_details as Record<string, any>;
+          } else if (typeof orgData.business_details === 'string') {
+            businessDetails = JSON.parse(orgData.business_details);
+          }
+        } catch (e) {
+          console.error('Error parsing business_details:', e);
+          // Continue with empty object if parsing fails
+        }
+      }
+
+      // Update business details with new values
+      if (formData['business.type']) businessDetails.type = formData['business.type'];
+      if (formData['business.is_intermediary'] !== undefined)
+        businessDetails.is_intermediary = formData['business.is_intermediary'];
+      if (formData['business.countries_of_operation'])
+        businessDetails.countries_of_operation = formData['business.countries_of_operation'];
+      if (formData['business.countries_of_payment'])
+        businessDetails.countries_of_payment = formData['business.countries_of_payment'];
+      if (formData['business.currencies'])
+        businessDetails.currencies = formData['business.currencies'];
+      if (formData['business.source_of_funds'])
+        businessDetails.source_of_funds = formData['business.source_of_funds'];
+      if (formData['business.estimated_monthly_volume'])
+        businessDetails.estimated_monthly_volume = formData['business.estimated_monthly_volume'];
+      if (formData['business.estimated_annual_revenue'])
+        businessDetails.estimated_annual_revenue = formData['business.estimated_annual_revenue'];
+
+      // Update country-specific fields
+      if (orgData.country === 'USA') {
+        if (formData['business.registered_agent_address'])
+          businessDetails.registered_agent_address = formData['business.registered_agent_address'];
+        if (formData['business.mailing_address'])
+          businessDetails.mailing_address = formData['business.mailing_address'];
+      } else if (orgData.country === 'IND') {
+        if (formData['business.gst_registration_number'])
+          businessDetails.gst_registration_number = formData['business.gst_registration_number'];
+        if (formData['business.pan_card_number'])
+          businessDetails.pan_card_number = formData['business.pan_card_number'];
+      } else if (orgData.country === 'CAN') {
+        if (formData['business.registered_address'])
+          businessDetails.registered_address = formData['business.registered_address'];
+        if (formData['business.regulatory_fines'] !== undefined)
+          businessDetails.regulatory_fines = formData['business.regulatory_fines'];
+        if (formData['business.civil_litigation'] !== undefined)
+          businessDetails.civil_litigation = formData['business.civil_litigation'];
+        if (formData['business.bankruptcy'] !== undefined)
+          businessDetails.bankruptcy = formData['business.bankruptcy'];
+      }
+
+      // Update business_details
+      orgUpdateData.business_details = businessDetails;
+
+      // Update verification status to in_progress
+      orgUpdateData.verification_status = 'in_progress';
+
+      // Update organization
+      await supabaseAdmin.from('organizations').update(orgUpdateData).eq('id', id);
+    }
+
+    // Run KYB verification on the business using Footprint's headless KYB API
     const kybResponse = await footprintService.runKybVerification({
       businessId: id,
       playbookKey: process.env.FOOTPRINT_KYB_PLAYBOOK_KEY || '',
@@ -98,6 +180,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           onboarding_id: kybResponse.onboarding_id,
           timestamp: new Date().toISOString(),
         },
+        ...(kybResponse.status === 'pass' ? { last_verified_at: new Date().toISOString() } : {}),
       })
       .eq('id', id);
 
@@ -106,6 +189,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       data: {
         status: kybResponse.status,
         requires_manual_review: kybResponse.requires_manual_review,
+        last_verified_at: kybResponse.status === 'pass' ? new Date().toISOString() : null,
       },
     });
   } catch (error) {

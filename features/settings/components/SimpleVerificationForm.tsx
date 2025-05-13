@@ -1,15 +1,17 @@
 // components/settings/SimpleVerificationForm.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import '@onefootprint/footprint-js/dist/footprint-js.css';
 import footprint from '@onefootprint/footprint-js';
+import SignatureCanvas from 'react-signature-canvas';
 
 import { kybApi } from '@/services/api/kybApi';
 import { useQueryClient } from '@tanstack/react-query';
-import { useOrganizations } from '@/hooks/useOrganizations';
+import { useBusinessVerification } from '@/hooks/useBusinessVerification';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +42,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import toast from 'react-hot-toast';
 
 // Document types for Footprint
 export enum DocumentType {
@@ -53,7 +54,7 @@ export enum DocumentType {
 
 interface SimpleVerificationFormProps {
   organizationId: string;
-  organizationName?: string;
+  organizationName: string;
   organizationEmail?: string;
   organizationCountry?: string; // ISO 3-letter country code: USA, IND, CAN
 }
@@ -62,7 +63,8 @@ interface SimpleVerificationFormProps {
 const baseVerificationSchema = z.object({
   businessType: z.string().min(1, 'Business type is required'),
   businessDescription: z.string().min(10, 'Business description is required'),
-  isIntermediary: z.enum(['yes', 'no']),
+  // isIntermediary is now hidden and defaulted to 'no'
+  isIntermediary: z.literal('no'),
   website: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
   phoneNumber: z.string().min(1, 'Phone number is required'),
   email: z.string().email('Please enter a valid email').optional(),
@@ -72,7 +74,13 @@ const baseVerificationSchema = z.object({
   countriesOfPayment: z.string().min(1, 'Countries of payment are required'),
   currencies: z.string().min(1, 'Currencies are required'),
   sourceOfFunds: z.string().min(1, 'Source of funds declaration is required'),
-  estimatedMonthlyVolume: z.string().min(1, 'Monthly volume is required'),
+  // Changed to enum for dropdown
+  estimatedTransactionSize: z.enum([
+    'Below $5,000',
+    '$5,000-$10,000',
+    '$10,000-$100,000',
+    '$100,000+',
+  ]),
   estimatedAnnualRevenue: z.enum([
     '$0-$99,999',
     '$100,000-$999,999',
@@ -83,16 +91,15 @@ const baseVerificationSchema = z.object({
   ]),
 
   // Signatory Information
+  signatoryName: z.string().min(1, 'Signatory name is required'),
   signatoryTitle: z.string().min(1, 'Signatory title is required'),
   signatoryEmail: z.string().email('Please enter a valid email'),
   signatoryPhone: z.string().min(1, 'Signatory phone is required'),
+  signatorySignature: z.string().min(1, 'Signature is required'),
 
   // Terms Acceptance
-  termsAccepted: z.literal(true, {
-    errorMap: () => ({ message: 'You must accept the terms to continue' }),
-  }),
-  privacyAccepted: z.literal(true, {
-    errorMap: () => ({ message: 'You must accept the privacy policy to continue' }),
+  termsAccepted: z.boolean().refine((val) => val === true, {
+    message: 'You must accept the terms to continue',
   }),
 });
 
@@ -135,7 +142,7 @@ type VerificationFormData = z.infer<typeof baseVerificationSchema> &
 
 export default function SimpleVerificationForm({
   organizationId,
-  organizationName = '',
+  organizationName,
   organizationEmail = '',
   organizationCountry = 'USA', // Default to USA if not provided
 }: SimpleVerificationFormProps) {
@@ -145,44 +152,39 @@ export default function SimpleVerificationForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [formData, setFormData] = useState<VerificationFormData | null>(null);
-  const { organization } = useOrganizations();
+
+  // Signature pad reference
+  const signaturePadRef = useRef<SignatureCanvas>(null);
+  const [signatureData, setSignatureData] = useState<string>('');
+  const [signatureError, setSignatureError] = useState<boolean>(false);
+
+  // Use the simplified business verification hook
+  const {
+    documentStatus,
+    getDocumentToken,
+    isGettingDocumentToken,
+    getBeneficialOwnerToken,
+    isGettingBeneficialOwnerToken,
+    initiateVerification,
+    isInitiatingVerification,
+    updateDocumentStatus,
+  } = useBusinessVerification({ organizationId });
 
   // Get schema based on organization country
   const verificationSchema = getVerificationSchema(organizationCountry);
 
-  // Document upload states
-  const [documentStatus, setDocumentStatus] = useState<Record<string, boolean>>({
-    [DocumentType.BUSINESS_FORMATION]: false,
-    [DocumentType.BUSINESS_OWNERSHIP]: false,
-    [DocumentType.PROOF_OF_ADDRESS]: false,
-    [DocumentType.TAX_ID]: false,
-    ownerIdFront: false,
-    ownerIdBack: false,
-    ownerProofOfAddress: false,
-  });
-
   // Add country-specific document statuses
   useEffect(() => {
-    const countrySpecificDocs: Record<string, boolean> = {};
-
-    if (organizationCountry === 'IND') {
-      countrySpecificDocs['companyPanCard'] = false;
-      countrySpecificDocs['gstCertificate'] = false;
-      countrySpecificDocs['memorandumOfAssociation'] = false;
-      countrySpecificDocs['itrDocument'] = false;
-    } else if (organizationCountry === 'CAN') {
-      countrySpecificDocs['shareholderRegistry'] = false;
-    }
-
-    setDocumentStatus((prev) => ({ ...prev, ...countrySpecificDocs }));
+    // All document statuses are already initialized in the hook
   }, [organizationCountry]);
 
   const form = useForm<VerificationFormData>({
-    resolver: zodResolver(verificationSchema),
+    // Cast the resolver to avoid TypeScript issues
+    resolver: zodResolver(verificationSchema as any),
     defaultValues: {
       businessType: '',
       businessDescription: '',
-      isIntermediary: 'no',
+      isIntermediary: 'no', // Default and hidden
       website: '',
       phoneNumber: '',
       email: organizationEmail,
@@ -190,13 +192,14 @@ export default function SimpleVerificationForm({
       countriesOfPayment: '',
       currencies: 'USD',
       sourceOfFunds: '',
-      estimatedMonthlyVolume: '',
+      estimatedTransactionSize: 'Below $5,000',
       estimatedAnnualRevenue: '$0-$99,999',
+      signatoryName: '',
       signatoryTitle: '',
       signatoryEmail: organizationEmail,
       signatoryPhone: '',
+      signatorySignature: '',
       termsAccepted: false,
-      privacyAccepted: false,
       // Country-specific defaults
       ...(organizationCountry === 'CAN'
         ? {
@@ -208,9 +211,50 @@ export default function SimpleVerificationForm({
     },
   });
 
+  // Function to handle signature pad clear
+  const clearSignature = () => {
+    if (signaturePadRef.current) {
+      signaturePadRef.current.clear();
+      setSignatureData('');
+      form.setValue('signatorySignature', '');
+      setSignatureError(false);
+    }
+  };
+
+  // Function to capture signature data
+  const captureSignature = () => {
+    if (signaturePadRef.current && !signaturePadRef.current.isEmpty()) {
+      const signatureDataURL = signaturePadRef.current.toDataURL('image/png');
+      setSignatureData(signatureDataURL);
+      form.setValue('signatorySignature', signatureDataURL);
+      setSignatureError(false);
+      return signatureDataURL;
+    } else {
+      setSignatureError(true);
+      return '';
+    }
+  };
+
+  // Check signature on form submission
+  const validateSignature = () => {
+    if (!signatureData) {
+      const newData = captureSignature();
+      if (!newData) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const onSubmit = async (data: VerificationFormData) => {
     try {
       setError('');
+
+      // Validate signature
+      if (!validateSignature()) {
+        setError('Please sign the form before submitting');
+        return;
+      }
 
       // Validate required documents based on country
       const requiredDocs = getRequiredDocuments(organizationCountry);
@@ -238,8 +282,35 @@ export default function SimpleVerificationForm({
     setError('');
 
     try {
-      // Convert form data to Footprint-compatible format
+      // Upload signature as a document first
+      // Convert form data to Footprint-compatible format first
       const footprintData = convertToFootprintFormat(formData, organizationCountry);
+
+      // Handle signature data
+      if (signatureData) {
+        try {
+          // Store signature metadata in the form data
+          footprintData['business.signature_provided'] = true;
+
+          // Store the actual signature temporarily in localStorage
+          try {
+            localStorage.setItem(`${organizationId}_signature`, signatureData);
+            console.log('Signature stored locally');
+          } catch (e) {
+            console.error('Failed to store signature locally:', e);
+          }
+
+          // Let the user know the signature is captured
+          toast.success('Signature captured successfully');
+
+          // You can optionally create a custom API endpoint to store the signature in Footprint
+          // This would be a separate backend endpoint that takes the signature and stores it
+          // in the user's vault using Footprint's API
+        } catch (err) {
+          console.error('Error processing signature:', err);
+          // Continue with form submission even if signature storage fails
+        }
+      }
 
       console.log('Submitting verification:', {
         organizationId,
@@ -248,30 +319,43 @@ export default function SimpleVerificationForm({
       });
 
       // Submit verification to backend
-      const result = await kybApi.initiateVerification({
-        organizationId,
+      const result = await initiateVerification({
         termsAccepted: formData.termsAccepted,
         formData: footprintData,
       });
-
+      // Use sonner
       toast.success(
-        'Verification submitted Your business verification has been submitted for review.',
+        'Verification submitted! Your business verification has been submitted for review.',
       );
 
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['verificationStatus', organizationId] });
       queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
 
-      // Redirect to status page or dashboard
+      // Redirect to dashboard
       router.push(`/dashboard`);
     } catch (err) {
       console.error('Verification submission error:', err);
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
       setError(`Failed to submit verification: ${errorMessage}`);
+      toast.error(`Failed to submit verification: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
       setShowConfirmation(false);
     }
+  };
+
+  // Helper function to convert data URL to File object for upload
+  const dataURLtoFile = (dataURL: string, filename: string): File => {
+    const arr = dataURL.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
   };
 
   const uploadDocument = async (documentType: string, documentName: string) => {
@@ -283,8 +367,7 @@ export default function SimpleVerificationForm({
       const fields = getDocumentFields(documentType, organizationCountry);
 
       // Get token from backend
-      const token = await kybApi.getDocumentToken({
-        organizationId,
+      const token = await getDocumentToken({
         documentType,
         fields,
       });
@@ -296,17 +379,12 @@ export default function SimpleVerificationForm({
         authToken: token,
         title: `Upload ${documentName}`,
         onComplete: () => {
-          setDocumentStatus((prev) => ({
-            ...prev,
-            [documentType]: true,
-          }));
-          toast({
-            title: 'Document uploaded',
-            description: `${documentName} has been successfully uploaded.`,
-          });
+          updateDocumentStatus(documentType, true);
+          toast.success(`${documentName} uploaded successfully`);
         },
         onError: (err: string) => {
           setError(`Failed to upload ${documentName}: ${err}`);
+          toast.error(`Failed to upload ${documentName}: ${err}`);
         },
       });
 
@@ -315,6 +393,7 @@ export default function SimpleVerificationForm({
       console.error('Document upload error:', err);
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
       setError(`Failed to initiate document upload: ${errorMessage}`);
+      toast.error(`Failed to initiate document upload: ${errorMessage}`);
     }
   };
 
@@ -333,6 +412,7 @@ export default function SimpleVerificationForm({
       memorandumOfAssociation: 'Memorandum of Association',
       itrDocument: 'Income Tax Return Document',
       shareholderRegistry: 'Shareholder Registry',
+      signatory_signature: 'Signatory Signature',
     };
 
     return displayNames[docType] || docType;
@@ -405,6 +485,7 @@ export default function SimpleVerificationForm({
         'id.country',
         'document.proof_of_address.front.image',
       ],
+      signatory_signature: ['document.signature.front.image'],
     };
 
     // Country-specific fields
@@ -439,7 +520,7 @@ export default function SimpleVerificationForm({
       'business.name': organizationName,
       'business.type': data.businessType,
       'business.description': data.businessDescription,
-      'business.is_intermediary': data.isIntermediary === 'yes',
+      'business.is_intermediary': false, // Always false as per requirements
       'business.website': data.website,
       'business.phone': data.phoneNumber,
       'business.email': data.email || organizationEmail,
@@ -447,13 +528,13 @@ export default function SimpleVerificationForm({
       'business.countries_of_payment': data.countriesOfPayment.split(',').map((c) => c.trim()),
       'business.currencies': data.currencies.split(',').map((c) => c.trim()),
       'business.source_of_funds': data.sourceOfFunds,
-      'business.estimated_monthly_volume': data.estimatedMonthlyVolume,
+      'business.estimated_transaction_size': data.estimatedTransactionSize,
       'business.estimated_annual_revenue': data.estimatedAnnualRevenue,
+      'business.signatory_name': data.signatoryName,
       'business.signatory_title': data.signatoryTitle,
       'business.signatory_email': data.signatoryEmail,
       'business.signatory_phone': data.signatoryPhone,
       'business.terms_accepted': data.termsAccepted,
-      'business.privacy_accepted': data.privacyAccepted,
     };
 
     // Country-specific fields
@@ -757,7 +838,7 @@ export default function SimpleVerificationForm({
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-sm font-medium text-gray-500">Legal Name:</h3>
-                  <p className="font-medium">{organizationName || 'N/A'}</p>
+                  <p className="font-medium">{organizationName}</p>
                 </div>
 
                 <FormField
@@ -813,28 +894,6 @@ export default function SimpleVerificationForm({
 
                 <FormField
                   control={form.control}
-                  name="isIntermediary"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Is your business acting as an intermediary?</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select yes or no" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="yes">Yes</SelectItem>
-                          <SelectItem value="no">No</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="website"
                   render={({ field }) => (
                     <FormItem>
@@ -855,6 +914,25 @@ export default function SimpleVerificationForm({
                       <FormLabel>Business Phone Number</FormLabel>
                       <FormControl>
                         <Input placeholder="+12345678900" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Business Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          value={organizationEmail}
+                          disabled
+                          className="bg-gray-50 cursor-not-allowed"
+                          onChange={() => {}}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1077,13 +1155,23 @@ export default function SimpleVerificationForm({
 
                 <FormField
                   control={form.control}
-                  name="estimatedMonthlyVolume"
+                  name="estimatedTransactionSize"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Estimated Monthly Transaction Volume (USD)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="$10,000" {...field} />
-                      </FormControl>
+                      <FormLabel>Average Transaction Size (USD)</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select transaction size range" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Below $5,000">Below $5,000</SelectItem>
+                          <SelectItem value="$5,000-$10,000">$5,000-$10,000</SelectItem>
+                          <SelectItem value="$10,000-$100,000">$10,000-$100,000</SelectItem>
+                          <SelectItem value="$100,000+">$100,000+</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1131,6 +1219,20 @@ export default function SimpleVerificationForm({
               <div className="space-y-4">
                 <FormField
                   control={form.control}
+                  name="signatoryName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Signatory Full Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter your full legal name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="signatoryTitle"
                   render={({ field }) => (
                     <FormItem>
@@ -1150,8 +1252,17 @@ export default function SimpleVerificationForm({
                     <FormItem>
                       <FormLabel>Signatory Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="signatory@example.com" {...field} />
+                        <Input
+                          value={organizationEmail}
+                          disabled
+                          className="bg-gray-50 cursor-not-allowed"
+                          onChange={() => {}} // No-op onChange to avoid React warnings
+                        />
                       </FormControl>
+                      <p className="text-xs text-gray-500 mt-1">
+                        This field is automatically filled with your account email and cannot be
+                        changed.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1164,8 +1275,57 @@ export default function SimpleVerificationForm({
                     <FormItem>
                       <FormLabel>Signatory Phone Number</FormLabel>
                       <FormControl>
-                        <Input placeholder="+12345678900" {...field} />
+                        <Input placeholder="+1 (XXX) XXX XXXX" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="signatorySignature"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Signature</FormLabel>
+                      <div className="mt-2">
+                        <div
+                          className={`border rounded-md p-2 ${
+                            signatureError ? 'border-red-500' : 'border-gray-200'
+                          }`}
+                        >
+                          <div className="bg-gray-50 rounded-md mb-2">
+                            <SignatureCanvas
+                              ref={signaturePadRef}
+                              canvasProps={{
+                                width: '100%',
+                                height: 200,
+                                className: 'signature-canvas',
+                              }}
+                              backgroundColor="rgba(247, 248, 249, 1)"
+                              onEnd={() => captureSignature()}
+                            />
+                          </div>
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={clearSignature}
+                              size="sm"
+                            >
+                              Clear
+                            </Button>
+                          </div>
+                        </div>
+                        {signatureError && (
+                          <p className="text-sm font-medium text-red-500 mt-1">
+                            Please sign before submitting
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          Draw your signature above. This will be saved as an official document.
+                        </p>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1174,70 +1334,51 @@ export default function SimpleVerificationForm({
             </CardContent>
           </Card>
 
-          {/* Terms and Submission Section */}
-          <Card>
-            <CardContent className="pt-6">
-              <h2 className="text-xl font-semibold mb-4">Review & Submit</h2>
+          {/* Terms and Submission Section - Simplified */}
+          <div className="pt-6 pb-6 border-t border-gray-200">
+            <FormField
+              control={form.control}
+              name="termsAccepted"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 rounded-md bg-gray-50">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-sm">
+                      I acknowledge and confirm that I am the authorized signatory for{' '}
+                      {organizationName} and that, to the best of my knowledge, all information and
+                      documents provided in this application are true, accurate, and complete. I
+                      accept the{' '}
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        Terms of Service
+                      </a>{' '}
+                      and{' '}
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        Privacy Policy
+                      </a>
+                      .
+                    </FormLabel>
+                    <FormMessage />
+                  </div>
+                </FormItem>
+              )}
+            />
 
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="termsAccepted"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md p-4 border">
-                      <FormControl>
-                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          I accept the{' '}
-                          <a
-                            href="/terms"
-                            target="_blank"
-                            className="text-blue-600 hover:underline"
-                          >
-                            Terms of Service
-                          </a>
-                        </FormLabel>
-                        <FormMessage />
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="privacyAccepted"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md p-4 border">
-                      <FormControl>
-                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          I accept the{' '}
-                          <a
-                            href="/privacy"
-                            target="_blank"
-                            className="text-blue-600 hover:underline"
-                          >
-                            Privacy Policy
-                          </a>
-                        </FormLabel>
-                        <FormMessage />
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <div className="pt-4">
-                  <Button type="submit" className="w-full">
-                    Review Verification Details
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="pt-6">
+              <Button type="submit" className="w-full">
+                Submit Verification
+              </Button>
+            </div>
+          </div>
         </form>
       </Form>
 
@@ -1304,8 +1445,8 @@ export default function SimpleVerificationForm({
                 <span className="font-medium">Currencies:</span> {formData?.currencies}
               </li>
               <li>
-                <span className="font-medium">Est. Monthly Volume:</span>{' '}
-                {formData?.estimatedMonthlyVolume}
+                <span className="font-medium">Avg. Transaction Size:</span>{' '}
+                {formData?.estimatedTransactionSize}
               </li>
               <li>
                 <span className="font-medium">Annual Revenue:</span>{' '}
@@ -1315,6 +1456,9 @@ export default function SimpleVerificationForm({
 
             <h3 className="font-semibold mb-2">Signatory Information</h3>
             <ul className="space-y-1 mb-4 text-sm">
+              <li>
+                <span className="font-medium">Name:</span> {formData?.signatoryName}
+              </li>
               <li>
                 <span className="font-medium">Title:</span> {formData?.signatoryTitle}
               </li>
@@ -1335,6 +1479,15 @@ export default function SimpleVerificationForm({
                 </li>
               ))}
             </ul>
+
+            {signatureData && (
+              <div className="mt-4">
+                <h3 className="font-semibold mb-2">Your Signature</h3>
+                <div className="border border-gray-200 p-2 rounded-md">
+                  <img src={signatureData} alt="Signature" className="max-w-full h-auto" />
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -1347,6 +1500,15 @@ export default function SimpleVerificationForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Add styles for the signature canvas */}
+      <style jsx global>{`
+        .signature-canvas {
+          width: 100%;
+          height: 200px;
+          border-radius: 0.25rem;
+        }
+      `}</style>
     </div>
   );
 }

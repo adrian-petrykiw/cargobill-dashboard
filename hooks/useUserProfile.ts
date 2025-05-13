@@ -2,19 +2,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrivy } from '@privy-io/react-auth';
 import { userApi } from '@/services/api/userApi';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { User, UpdateProfileRequest } from '@/schemas/user.schema';
 
 export function useUserProfile() {
   const queryClient = useQueryClient();
-  const { user: privyUser } = usePrivy();
+  const { user: privyUser, authenticated } = usePrivy();
 
   const profileQuery = useQuery<User>({
     queryKey: ['userProfile'],
     queryFn: async () => {
+      // Only attempt to fetch profile if user is authenticated
+      if (!authenticated) {
+        throw new Error('User not authenticated');
+      }
+
       const data = await userApi.getCurrentUser();
       if (!data) throw new Error('Failed to fetch user profile');
       return data;
+    },
+    // Don't attempt this query until authenticated
+    enabled: !!authenticated,
+    // Add retry logic for network failures, but not for 401/404 errors
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('401')) {
+        return false; // Don't retry auth errors
+      }
+      return failureCount < 3; // Retry other errors up to 3 times
     },
   });
 
