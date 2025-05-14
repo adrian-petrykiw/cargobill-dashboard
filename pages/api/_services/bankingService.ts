@@ -7,19 +7,6 @@ const BANKING_API_KEY =
   process.env.BANKING_API_KEY || '91855428ab9f4308ffdbb5627c9f52bf75f4377ee0b100d73fbfff33d1564cba'; // Default to QA key
 const BANKING_API_URL =
   process.env.BANKING_API_URL || 'https://slipstreamdev.datavysta.com/api/rest';
-const QA_CUSTOMER_ID = '5719939'; // QA customer ID
-
-// Helper function to get customerID for development environment
-const getDevCustomerId = (customerID?: string): string => {
-  // In development, use QA ID as fallback. In production, require explicit ID
-  if (!customerID && process.env.NODE_ENV === 'development') {
-    return QA_CUSTOMER_ID;
-  }
-  if (!customerID) {
-    throw new Error('Customer ID is required');
-  }
-  return customerID;
-};
 
 // Types for Banking API
 export interface BankingTransaction {
@@ -43,24 +30,20 @@ export interface TransactionsResponse {
 }
 
 export interface TransactionsParams {
-  accountID: string;
+  accountID: string; // This is a BankAccountID (sub-account ID)
   startDate?: string;
   endDate?: string;
   limit?: number;
   offset?: number;
 }
 
-export interface CreateAccountParams {
-  customerID: string;
-}
-
-export interface CreateAccountResponse {
-  BankAccountID: string;
+export interface CreateSubAccountResponse {
+  BankAccountID: string; // The ID of the newly created sub-account
 }
 
 export interface AccountInfoParams {
-  customerID: string;
-  accountID: string;
+  customerID: string; // Organization/FBO ID
+  accountID: string; // BankAccountID (sub-account ID)
 }
 
 export interface AccountDetail {
@@ -105,37 +88,37 @@ const handleBankingError = (error: unknown, operation: string) => {
 };
 
 /**
- * Create a new bank account for a customer
- * @param customerID Optional customer ID (required in production)
- * @returns Response with the new bank account ID
+ * Create a new sub-account under our main FBO account
+ * @param customerID Our organization's customer ID
+ * @returns Response with the new bank sub-account ID
  */
-export async function createAccount(customerID?: string): Promise<CreateAccountResponse> {
+export async function createSubAccount(customerID: string): Promise<CreateSubAccountResponse> {
   try {
-    const resolvedCustomerId = getDevCustomerId(customerID);
+    // Note: The API expects "accountID" but this is actually the customerID
+    // This is a naming inconsistency in the Slipstream API
     const response = await bankingClient.post('/workflows/CreateAccount', {
-      customerID: resolvedCustomerId,
+      accountID: customerID,
     });
     return response.data;
   } catch (error) {
-    return handleBankingError(error, 'create account');
+    return handleBankingError(error, 'create sub-account');
   }
 }
 
 /**
- * Get account information
- * @param accountID The account ID
- * @param customerID Optional customer ID (required in production)
+ * Get account information for a sub-account
+ * @param bankAccountID The bank sub-account ID
+ * @param customerID Our organization's customer ID
  * @returns Account details
  */
 export async function getAccountInfo(
-  accountID: string,
-  customerID?: string,
+  bankAccountID: string,
+  customerID: string,
 ): Promise<AccountInfoResponse> {
   try {
-    const resolvedCustomerId = getDevCustomerId(customerID);
     const response = await bankingClient.post('/workflows/AccountInfo', {
-      customerID: resolvedCustomerId,
-      accountID,
+      customerID,
+      accountID: bankAccountID,
     });
     return response.data;
   } catch (error) {
@@ -144,16 +127,17 @@ export async function getAccountInfo(
 }
 
 /**
- * Get transaction history for an account
- * @param accountID The account ID to get transactions for
+ * Get transaction history for a sub-account
+ * @param bankAccountID The sub-account ID to get transactions for
+ * @param options Additional options like date range and pagination
  * @returns Transaction history
  */
 export async function getTransactionHistory(
-  accountID: string,
+  bankAccountID: string,
   options: Omit<TransactionsParams, 'accountID'> = {},
 ): Promise<TransactionsResponse> {
   try {
-    const params = { accountID, ...options };
+    const params = { accountID: bankAccountID, ...options };
     const response = await bankingClient.post('/workflows/Transactions', params);
     return response.data;
   } catch (error) {
@@ -164,15 +148,15 @@ export async function getTransactionHistory(
 /**
  * Get a specific transaction by ID
  * @param transactionId The transaction ID to look up
- * @param accountID The account ID to search in
+ * @param bankAccountID The sub-account ID to search in
  * @returns The transaction if found, or null
  */
 export async function getTransactionById(
   transactionId: number,
-  accountID: string,
+  bankAccountID: string,
 ): Promise<BankingTransaction | null> {
   try {
-    const transactions = await getTransactionHistory(accountID);
+    const transactions = await getTransactionHistory(bankAccountID);
     const transaction = transactions.values.find((t) => t.transaction_id === transactionId);
     return transaction || null;
   } catch (error) {
@@ -181,15 +165,14 @@ export async function getTransactionById(
 }
 
 /**
- * Check if an account exists and is active
- * @param accountID The account ID to check
- * @param customerID Optional customer ID (required in production)
+ * Check if a sub-account exists and is active
+ * @param bankAccountID The sub-account ID to check
+ * @param customerID Our organization's customer ID
  * @returns Boolean indicating if account is active
  */
-export async function isAccountActive(accountID: string, customerID?: string): Promise<boolean> {
+export async function isAccountActive(bankAccountID: string, customerID: string): Promise<boolean> {
   try {
-    const resolvedCustomerId = getDevCustomerId(customerID);
-    const accountInfo = await getAccountInfo(accountID, resolvedCustomerId);
+    const accountInfo = await getAccountInfo(bankAccountID, customerID);
     if (!accountInfo.AccountDetail || accountInfo.AccountDetail.length === 0) {
       return false;
     }
@@ -201,18 +184,17 @@ export async function isAccountActive(accountID: string, customerID?: string): P
 }
 
 /**
- * Get account details including routing and account numbers
- * @param accountID The account ID to get details for
- * @param customerID Optional customer ID (required in production)
+ * Get sub-account details including routing and account numbers
+ * @param bankAccountID The sub-account ID to get details for
+ * @param customerID Our organization's customer ID
  * @returns Account details including routing and account numbers
  */
 export async function getAccountDetails(
-  accountID: string,
-  customerID?: string,
+  bankAccountID: string,
+  customerID: string,
 ): Promise<AccountDetail | null> {
   try {
-    const resolvedCustomerId = getDevCustomerId(customerID);
-    const accountInfo = await getAccountInfo(accountID, resolvedCustomerId);
+    const accountInfo = await getAccountInfo(bankAccountID, customerID);
     if (!accountInfo.AccountDetail || accountInfo.AccountDetail.length === 0) {
       return null;
     }
@@ -224,7 +206,7 @@ export async function getAccountDetails(
 }
 
 export default {
-  createAccount,
+  createSubAccount,
   getAccountInfo,
   getTransactionHistory,
   getTransactionById,

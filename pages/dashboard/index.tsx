@@ -243,7 +243,7 @@ export default function Dashboard() {
             </Button>
           </div>
 
-          {/* <Card className="p-0 overflow-hidden shadow-sm">
+          <Card className="p-0 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-gray-50">
@@ -346,7 +346,7 @@ export default function Dashboard() {
                 </TableBody>
               </Table>
             </div>
-          </Card> */}
+          </Card>
         </div>
       </div>
 
