@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import footprint from '@onefootprint/footprint-js';
 import Spinner from '@/components/common/Spinner';
+import { getCountryNameFromAlpha3 } from '@/lib/helpers/countryCodeUtils';
 
 export default function OrganizationTab() {
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
@@ -156,7 +157,10 @@ export default function OrganizationTab() {
       launchFootprintVerification();
     } else {
       // For non-US companies, open our custom dialog
-      setIsVerificationModalOpen(true);
+      toast.error(
+        `Please email support@cargobill.co to verify your business in ${getCountryNameFromAlpha3(organization?.country)}`,
+      );
+      // setIsVerificationModalOpen(true);
     }
   };
 
