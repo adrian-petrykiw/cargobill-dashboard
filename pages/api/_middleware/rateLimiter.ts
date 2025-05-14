@@ -8,10 +8,10 @@ import { AuthenticatedRequest } from '@/types/api/requests';
 export type RateLimitType = 'standard' | 'auth' | 'payment' | 'public';
 
 const rateLimitConfigs: Record<RateLimitType, { limit: number; windowSeconds: number }> = {
-  standard: { limit: 500, windowSeconds: 60 }, // 60 requests per minute
-  auth: { limit: 200, windowSeconds: 60 }, // 10 auth attempts per minute
-  payment: { limit: 50, windowSeconds: 60 }, // 5 payment operations per minute
-  public: { limit: 1000, windowSeconds: 60 }, // 120 requests per minute for public endpoints
+  standard: { limit: 500, windowSeconds: 60 }, // 500 requests per minute
+  auth: { limit: 200, windowSeconds: 60 }, // 200 auth attempts per minute
+  payment: { limit: 50, windowSeconds: 60 }, // 50 payment operations per minute
+  public: { limit: 1000, windowSeconds: 60 }, // 1000 requests per minute for public endpoints
 };
 
 // Mock rate limiter for development when Redis is not available
@@ -50,6 +50,15 @@ const rateLimiters: Record<RateLimitType, any> = {
   payment: undefined,
   public: undefined,
 };
+
+// Safely log warnings - handle potential logger failures
+try {
+  if (!isRedisAvailable) {
+    logger.warn('[DEV MODE] Using mock rate limiters - Redis connection not available');
+  }
+} catch (error) {
+  console.warn('[DEV MODE] Using mock rate limiters - Redis connection not available');
+}
 
 if (isRedisAvailable) {
   // Production rate limiters using Upstash Redis
@@ -94,7 +103,6 @@ if (isRedisAvailable) {
   });
 } else {
   // Development fallback using mock rate limiters
-  logger.warn('[DEV MODE] Using mock rate limiters - Redis connection not available');
   rateLimiters.standard = createMockRateLimiter('standard');
   rateLimiters.auth = createMockRateLimiter('auth');
   rateLimiters.payment = createMockRateLimiter('payment');
@@ -141,14 +149,18 @@ export function withRateLimit<T extends NextApiRequest = NextApiRequest>(
       res.setHeader('X-RateLimit-Reset', reset.toString());
 
       if (!success) {
-        logger.warn({
-          message: 'Rate limit exceeded',
-          type,
-          ip: getIdentifier(req),
-          userId: (req as any).user?.id,
-          path: req.url,
-          method: req.method,
-        });
+        try {
+          logger.warn({
+            message: 'Rate limit exceeded',
+            type,
+            ip: getIdentifier(req),
+            userId: (req as any).user?.id,
+            path: req.url,
+            method: req.method,
+          });
+        } catch (logError) {
+          console.warn('Rate limit exceeded for', identifier);
+        }
 
         return res.status(429).json({
           success: false,
@@ -162,11 +174,15 @@ export function withRateLimit<T extends NextApiRequest = NextApiRequest>(
 
       return handler(req, res);
     } catch (error) {
-      logger.error({
-        message: 'Rate limiting error',
-        error: error instanceof Error ? error.message : String(error),
-        path: req.url,
-      });
+      try {
+        logger.error({
+          message: 'Rate limiting error',
+          error: error instanceof Error ? error.message : String(error),
+          path: req.url,
+        });
+      } catch (logError) {
+        console.error('Rate limiting error:', error);
+      }
 
       // Fail open to prevent blocking legitimate traffic if rate limiter fails
       return handler(req, res);

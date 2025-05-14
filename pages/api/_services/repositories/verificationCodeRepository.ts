@@ -5,9 +5,9 @@ import {
   type VerificationCode,
 } from '@/schemas/verificationCode.schema';
 import { generateRandomCode, constantTimeCompare } from '../../_utils/securityUtils';
-import { logger } from '../../_config/logger';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/db/supabase';
+import logger from '../../_config/logger';
 
 /**
  * Repository for handling verification code operations

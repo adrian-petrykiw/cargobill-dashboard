@@ -28,7 +28,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     });
   } catch (error: any) {
     console.error('Error checking user existence:', error);
-    return res.status(500).json(ApiError.internalServerError(error));
+
+    // More detailed error logging
+    if (error.code) {
+      console.error(`Database error code: ${error.code}, message: ${error.message}`);
+    }
+
+    // Always return a 200 with exists: false rather than a 500 for authentication flows
+    // This prevents exposing internal errors to clients while maintaining a consistent API
+    return res.status(200).json({
+      success: true,
+      data: { exists: false },
+    });
   }
 }
 
