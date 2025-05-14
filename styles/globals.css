@@ -372,3 +372,27 @@
     stroke-dashoffset: -124;
   }
 }
+
+/* Sonner toast centering with proper width */
+[data-sonner-toaster][data-position="top-center"] {
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  right: auto !important;
+  width: auto !important; /* Allow width to adjust to content */
+  max-width: 100% !important;
+}
+
+[data-sonner-toaster][data-position="top-center"] > div {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: auto !important; /* Let inner container adjust to content width */
+}
+
+[data-sonner-toaster][data-position="top-center"] [data-sonner-toast] {
+  width: auto !important;  /* Critical for content-based sizing */
+  min-width: min-content !important;
+  max-width: max-content !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}

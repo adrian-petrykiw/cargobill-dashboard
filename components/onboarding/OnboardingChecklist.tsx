@@ -4,7 +4,7 @@ import { Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ROUTES } from '@/constants/routes';
 import { useOnboardingStore } from '@/stores/onboardingStore';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 interface OnboardingTaskProps {
   title: string;

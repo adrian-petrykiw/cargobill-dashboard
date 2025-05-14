@@ -32,7 +32,7 @@ import {
   OnboardingOrganizationRequest,
 } from '@/schemas/organization.schema';
 import { useOnboarding } from '@/hooks/useOnboarding';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 import { countryOptions } from '@/constants/countryData';
 import { DialogClose } from '@radix-ui/react-dialog';
 import { Info, CheckCircle } from 'lucide-react';

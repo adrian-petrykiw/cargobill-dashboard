@@ -7,7 +7,7 @@ import { userApi } from '@/services/api/userApi';
 import { organizationApi } from '@/services/api/organizationApi'; // Add this import
 import { ROUTES } from '@/constants/routes';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 import { useUserStore } from '@/stores/userStore';
 import { useOrganizationStore } from '@/stores/organizationStore'; // Add this import if implementing the store
 import { useState, useCallback } from 'react';

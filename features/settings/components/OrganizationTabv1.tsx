@@ -6,17 +6,11 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { useOrganizations } from '@/hooks/useOrganizations';
 import SimpleVerificationForm from './SimpleVerificationForm';
-import '@onefootprint/footprint-js/dist/footprint-js.css';
-import toast from 'react-hot-toast';
-import axios from 'axios';
-import footprint from '@onefootprint/footprint-js';
-import Spinner from '@/components/common/Spinner';
 
 export default function OrganizationTab() {
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
-  const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const { setBusinessVerified } = useOnboardingStore();
-  const { organization, isLoading, refetch } = useOrganizations();
+  const { organization, isLoading } = useOrganizations();
 
   // Determine business verification status from organization data with proper null check
   const isBusinessVerified = !!(
@@ -25,23 +19,6 @@ export default function OrganizationTab() {
     organization.verification_status === 'verified'
   );
 
-  // Determine if the company is US-based (only if country exists)
-  const isUSBased = organization?.country
-    ? ['USA', 'US', 'United States', 'United States of America'].includes(organization.country)
-    : null;
-
-  // Safely extract business email
-  const getBusinessEmail = () => {
-    if (
-      organization?.business_details &&
-      typeof organization.business_details === 'object' &&
-      'email' in organization.business_details
-    ) {
-      return (organization.business_details.email as string) || '';
-    }
-    return '';
-  };
-
   // Sync the onboarding store with the organization verification status
   useEffect(() => {
     if (organization) {
@@ -49,152 +26,12 @@ export default function OrganizationTab() {
         verificationStatus: organization.verification_status,
         lastVerifiedAt: organization.last_verified_at,
         isVerified: isBusinessVerified,
-        country: organization.country,
       });
 
       // Update the onboarding store to match the actual verification status
       setBusinessVerified(isBusinessVerified);
     }
   }, [organization, isBusinessVerified, setBusinessVerified]);
-
-  // Launch Footprint verification flow directly
-  const launchFootprintVerification = async () => {
-    if (!organization?.id || !organization?.country) {
-      toast.error('Organization information is incomplete');
-      return;
-    }
-
-    setIsVerifying(true);
-
-    try {
-      // Get Footprint token
-      const { data } = await axios.post('/api/footprint/create-session', {
-        organizationId: organization.id,
-        organizationCountry: organization.country,
-      });
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to create Footprint session');
-      }
-
-      const footprintToken = data.data.token;
-
-      // Prepare bootstrap data
-      const bootstrapData: Record<string, string> = {
-        'business.name': organization.name,
-      };
-
-      const businessEmail = getBusinessEmail();
-      if (businessEmail) {
-        bootstrapData['id.email'] = businessEmail;
-      }
-
-      // Initialize Footprint verification
-      const component = footprint.init({
-        kind: 'verify',
-        authToken: footprintToken,
-        bootstrapData,
-        onComplete: (validationToken) => {
-          console.log('Footprint verification completed:', validationToken);
-          handleVerificationComplete(validationToken);
-        },
-        onError: (error) => {
-          console.error('Footprint verification error:', error);
-          toast.error(`Verification error: ${error}`);
-          setIsVerifying(false);
-        },
-        onCancel: () => {
-          console.log('Footprint verification cancelled');
-          setIsVerifying(false);
-        },
-        appearance: {
-          variables: {
-            borderRadius: '0.5rem',
-            buttonPrimaryBg: '#315E4C',
-            buttonPrimaryHoverBg: '#46866c',
-            buttonPrimaryColor: '#FFF',
-            colorAccent: '#315E4C',
-          },
-        },
-      });
-
-      component.render();
-    } catch (err) {
-      console.error('Error launching Footprint verification:', err);
-
-      // Improved error handling with more specific messages
-      if (axios.isAxiosError(err)) {
-        if (err.response?.status === 404) {
-          toast.error('Verification service endpoint not found. Please contact support.');
-        } else if (err.response?.data?.error) {
-          toast.error(`Verification error: ${err.response.data.error}`);
-        } else {
-          toast.error('Unable to initialize verification. Please try again later.');
-        }
-      } else {
-        toast.error('Unable to initialize verification. Please try again later.');
-      }
-
-      setIsVerifying(false);
-    }
-  };
-
-  // Handle verification button click
-  const handleVerificationClick = () => {
-    // Check if country is missing
-    if (!organization?.country) {
-      toast.error(
-        'Country information is missing. Please update your organization profile with a valid country before proceeding with verification.',
-        { duration: 5000 },
-      );
-      return;
-    }
-
-    // Different flow for US vs non-US companies
-    if (isUSBased) {
-      // For US companies, launch Footprint directly
-      launchFootprintVerification();
-    } else {
-      // For non-US companies, open our custom dialog
-      setIsVerificationModalOpen(true);
-    }
-  };
-
-  // Handle verification completion
-  const handleVerificationComplete = async (validationToken: string) => {
-    setIsVerifying(true);
-
-    try {
-      // Send the validation token to your backend to validate and update verification status
-      const response = await fetch('/api/footprint/validate-kyb', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          validationToken,
-          organizationId: organization?.id,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to validate KYB');
-      }
-
-      // Close modal and refresh organization data
-      setIsVerificationModalOpen(false);
-      setIsVerifying(false);
-
-      // Refresh organization data
-      refetch();
-
-      toast.success('Verification process completed successfully');
-    } catch (error) {
-      console.error('Error validating KYB:', error);
-      toast.error('Verification validation failed. Please try again later.');
-      setIsVerifying(false);
-    }
-  };
 
   // Show loading state while organization data is loading
   if (isLoading) {
@@ -260,7 +97,7 @@ export default function OrganizationTab() {
 
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Country</h3>
-                <p>{organization?.country || 'Not specified'}</p>
+                <p>United States</p>
               </div>
 
               <div>
@@ -280,21 +117,7 @@ export default function OrganizationTab() {
                 Verify your business to unlock full functionality and ensure compliance with
                 regulations.
               </p>
-
-              {isVerifying ? (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <Spinner className="h-8 w-8 text-gray-400" />
-                  <p className="text-sm text-gray-500">Initializing verification...</p>
-                </div>
-              ) : (
-                <Button onClick={handleVerificationClick}>Verify Your Business</Button>
-              )}
-
-              {!organization?.country && (
-                <p className="mt-3 text-sm text-amber-600">
-                  Note: You will need to set your organization's country before verification.
-                </p>
-              )}
+              <Button onClick={() => setIsVerificationModalOpen(true)}>Verify Your Business</Button>
             </div>
           )}
         </CardContent>
@@ -342,17 +165,16 @@ export default function OrganizationTab() {
         </CardContent>
       </Card>
 
-      {/* Dialog for non-US verification - Only shown for non-US companies */}
-      {organization && organization.country && !isUSBased && (
+      {/* Use of DialogTitle to fix accessibility warning */}
+      {organization && (
         <Dialog open={isVerificationModalOpen} onOpenChange={setIsVerificationModalOpen}>
           <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] overflow-y-auto">
             <DialogTitle className="sr-only">Business Verification</DialogTitle>
-
             <SimpleVerificationForm
               organizationId={organization.id}
               organizationName={organization.name}
-              organizationEmail={getBusinessEmail()}
-              organizationCountry={organization.country}
+              organizationEmail={organization.business_details['email']}
+              organizationCountry={organization.country || 'USA'}
             />
           </DialogContent>
         </Dialog>

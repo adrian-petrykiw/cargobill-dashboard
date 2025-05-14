@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrivy } from '@privy-io/react-auth';
 import { userApi } from '@/services/api/userApi';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 import type { User, UpdateProfileRequest } from '@/schemas/user.schema';
 
 export function useUserProfile() {

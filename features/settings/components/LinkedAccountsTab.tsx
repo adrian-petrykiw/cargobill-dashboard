@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import toast from 'react-hot-toast';
 
 // Form schema for bank account
 const bankAccountSchema = z.object({
@@ -61,6 +62,14 @@ export default function LinkedAccountsTab() {
       cvv: '',
     },
   });
+
+  const handleAddPaymentMethod = () => {
+    toast.error(`Please complete business verification`, {
+      duration: 3000,
+      position: 'top-center',
+      icon: '🔒',
+    });
+  };
 
   const onBankSubmit = async (data: BankAccountFormData) => {
     try {
@@ -126,16 +135,21 @@ export default function LinkedAccountsTab() {
               </div>
             </div>
           ) : (
+            // <div className="text-center py-8">
+            //   <p className="text-sm text-gray-500 mb-4">No bank accounts linked yet.</p>
+            //   <Button
+            //     onClick={() => {
+            //       setPaymentMethodTab('bank');
+            //       setIsAddAccountModalOpen(true);
+            //     }}
+            //   >
+            //     Add Bank Account
+            //   </Button>
+            // </div>
+
             <div className="text-center py-8">
               <p className="text-sm text-gray-500 mb-4">No bank accounts linked yet.</p>
-              <Button
-                onClick={() => {
-                  setPaymentMethodTab('bank');
-                  setIsAddAccountModalOpen(true);
-                }}
-              >
-                Add Bank Account
-              </Button>
+              <Button onClick={handleAddPaymentMethod}>Add Bank Account</Button>
             </div>
           )}
         </CardContent>
@@ -170,16 +184,21 @@ export default function LinkedAccountsTab() {
               </div>
             </div>
           ) : (
+            // <div className="text-center py-8">
+            //   <p className="text-sm text-gray-500 mb-4">No credit cards linked yet.</p>
+            //   <Button
+            //     onClick={() => {
+            //       setPaymentMethodTab('card');
+            //       setIsAddAccountModalOpen(true);
+            //     }}
+            //   >
+            //     Add Credit Card
+            //   </Button>
+            // </div>
+
             <div className="text-center py-8">
               <p className="text-sm text-gray-500 mb-4">No credit cards linked yet.</p>
-              <Button
-                onClick={() => {
-                  setPaymentMethodTab('card');
-                  setIsAddAccountModalOpen(true);
-                }}
-              >
-                Add Credit Card
-              </Button>
+              <Button onClick={handleAddPaymentMethod}>Add Credit Card</Button>
             </div>
           )}
         </CardContent>

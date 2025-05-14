@@ -18,7 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useOrganizations } from '@/hooks/useOrganizations';
 import { OrganizationSetupModal } from '@/components/onboarding/OnboardingSetupModal';
 import type { Organization } from '@/schemas/organization.schema';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 export default function Dashboard() {
   const user = useUserStore((state) => state.user);
@@ -243,7 +243,7 @@ export default function Dashboard() {
             </Button>
           </div>
 
-          <Card className="p-0 overflow-hidden shadow-sm">
+          {/* <Card className="p-0 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-gray-50">
@@ -346,6 +346,13 @@ export default function Dashboard() {
                 </TableBody>
               </Table>
             </div>
+          </Card> */}
+          <Card>
+            <CardContent>
+              <div className="text-center py-16">
+                <p className="text-gray-400 text-xs">No recent activity</p>
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>
