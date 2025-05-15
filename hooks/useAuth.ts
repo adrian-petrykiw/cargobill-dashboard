@@ -11,6 +11,8 @@ import { toast } from 'react-hot-toast';
 import { useUserStore } from '@/stores/userStore';
 import { useOrganizationStore } from '@/stores/organizationStore'; // Add this import if implementing the store
 import { useState, useCallback } from 'react';
+import { useSidebarStore } from '@/stores/preferences/sidebarStore';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 
 export default function useAuth() {
   const { logout: privyLogout, authenticated, ready, user: privyUser, getAccessToken } = usePrivy();
@@ -241,7 +243,18 @@ export default function useAuth() {
   const logout = async () => {
     clearUser();
     clearOrganizations();
+
+    const clearOnboarding = useOnboardingStore.getState().clearOnboarding;
+    clearOnboarding();
+
+    const setSidebarMode = useSidebarStore.getState().setMode;
+    setSidebarMode('hover');
     queryClient.clear();
+    localStorage.removeItem('user-storage');
+    localStorage.removeItem('organization-storage');
+    localStorage.removeItem('cargobill-onboarding');
+    localStorage.removeItem('sidebar-storage');
+
     await privyLogout();
     router.push(ROUTES.AUTH.SIGNIN);
   };

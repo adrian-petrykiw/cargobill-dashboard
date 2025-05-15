@@ -90,6 +90,8 @@ export default function OrganizationTab() {
         bootstrapData['id.email'] = businessEmail;
       }
 
+      console.log('bootstrapData is: ', JSON.stringify(bootstrapData));
+
       // Initialize Footprint verification
       const component = footprint.init({
         kind: 'verify',

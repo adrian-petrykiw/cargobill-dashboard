@@ -86,7 +86,7 @@ export function OrganizationSetupModal({
 
   // Handle continuing after successful creation
   const handleCloseWithSuccess = () => {
-    toast.success('Account created successfully');
+    toast.success('Wallet created successfully');
     onClose();
   };
 

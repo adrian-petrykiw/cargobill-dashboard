@@ -40,6 +40,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       createKey: createKey.substring(0, 8) + '...',
     });
 
+    let verificationProvider = 'footprint';
+    if (organizationData.country !== 'USA') {
+      verificationProvider = 'signzy';
+    }
+
     const organization = await organizationRepository.create(
       {
         name: organizationData.business_name,
@@ -61,6 +66,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           signature: signature,
           created_at: new Date().toISOString(),
         },
+        verification_provider: verificationProvider,
       },
       req.user.id,
     );

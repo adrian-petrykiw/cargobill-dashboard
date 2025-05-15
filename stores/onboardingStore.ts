@@ -12,6 +12,7 @@ interface OnboardingState {
   setFirstPaymentSent: (value: boolean) => void;
   setPaymentLinkShared: (value: boolean) => void;
   isOnboardingComplete: () => boolean;
+  clearOnboarding: () => void;
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -32,6 +33,14 @@ export const useOnboardingStore = create<OnboardingState>()(
           get();
         return businessVerified && paymentMethodsLinked && firstPaymentSent && paymentLinkShared;
       },
+
+      clearOnboarding: () =>
+        set({
+          businessVerified: false,
+          paymentMethodsLinked: false,
+          firstPaymentSent: false,
+          paymentLinkShared: false,
+        }),
     }),
     {
       name: 'cargobill-onboarding',

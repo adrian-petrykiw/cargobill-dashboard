@@ -76,7 +76,7 @@ export function useOnboarding() {
         );
 
         // Update onboarding store
-        setBusinessVerified(true);
+        // setBusinessVerified(true);
 
         return completedOrganization;
       } catch (error) {

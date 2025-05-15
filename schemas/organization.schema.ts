@@ -48,7 +48,6 @@ export const createOrganizationSchema = organizationSchema
     invited_by: true,
     last_verified_at: true,
     treasury_wallet: true,
-    verification_provider: true,
     yield_wallet: true,
   })
   .extend({
@@ -56,6 +55,7 @@ export const createOrganizationSchema = organizationSchema
     subscription_tier: z.string().default('free'),
     entity_type: z.string().default('standalone'),
     account_status: z.string().default('active'),
+    verification_provider: z.string().default('footprint'),
   });
 
 export type CreateOrganizationRequest = z.infer<typeof createOrganizationSchema>;
