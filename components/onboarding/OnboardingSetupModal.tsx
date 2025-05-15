@@ -37,6 +37,8 @@ import { countryOptions } from '@/constants/countryData';
 import { DialogClose } from '@radix-ui/react-dialog';
 import { Info, CheckCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useQueryClient } from '@tanstack/react-query';
+import { ROUTES } from '@/constants/routes';
 
 interface OrganizationSetupModalProps {
   isOpen: boolean;
@@ -52,13 +54,14 @@ export function OrganizationSetupModal({
   const [primaryEmailSameAsAdmin, setPrimaryEmailSameAsAdmin] = useState(true);
   const { createOrganization, isCreating } = useOnboarding();
   const [orgCreated, setOrgCreated] = useState(false);
+  const queryClient = useQueryClient();
 
   // Define form with useForm hook
   const form = useForm<OnboardingOrganizationRequest>({
     resolver: zodResolver(onboardingOrganizationSchema),
     defaultValues: {
       business_name: '',
-      country: 'USA', // Default to USA
+      country: 'USA',
       business_email: userEmail,
     },
   });
@@ -71,43 +74,53 @@ export function OrganizationSetupModal({
     }
   };
 
-  // Form submission handler
   const onSubmit = async (data: OnboardingOrganizationRequest) => {
     try {
       await createOrganization(data);
       setOrgCreated(true);
-      // Do NOT close the modal here - show success state instead
+      queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
+
+      // Do NOT close modal - show success state instead
     } catch (error) {
       console.error('Failed to create organization: ', error);
       toast.error('Failed to create organization');
-      // Modal stays open on failure
     }
   };
 
-  // Handle continuing after successful creation
   const handleCloseWithSuccess = () => {
     toast.success('Wallet created successfully');
+
+    queryClient.invalidateQueries({ queryKey: ['userOrganizations'] });
+    queryClient.refetchQueries({ queryKey: ['userOrganizations'] });
+
     onClose();
+
+    setTimeout(() => {
+      window.location.href = ROUTES.DASHBOARD;
+    }, 300);
+  };
+
+  // Handle force reloading the page
+  const handleForceReload = () => {
+    window.location.reload();
   };
 
   return (
     <Dialog
       open={isOpen}
+      modal={true}
       onOpenChange={(open) => {
-        // Only allow closing if org was created or if opening
         if (!open) {
           if (orgCreated) {
             handleCloseWithSuccess();
           }
-          // If org not created, do nothing (prevents dialog from closing)
           return;
         }
-        // Allow opening
         return true;
       }}
     >
       <DialogContent
-        className="sm:max-w-[600px] focus:outline-none focus:ring-0 focus:ring-offset-0 bg-white"
+        className="sm:max-w-[600px] focus:outline-none focus:ring-0 focus:ring-offset-0 bg-white [&>button]:hidden"
         // Override the default backdrop styles
         style={
           {
@@ -123,8 +136,7 @@ export function OrganizationSetupModal({
             Let's setup your business! We'll create a secure wallet for payment operations.
           </DialogDescription>
         </DialogHeader>
-        {/* Only show close button if org was created */}
-        {orgCreated && <DialogClose />}
+        <DialogClose disabled={true} onClick={() => {}} />
 
         {orgCreated ? (
           <div className="space-y-6 py-4">
@@ -140,6 +152,9 @@ export function OrganizationSetupModal({
               className="w-full bg-green-600 hover:bg-green-700"
             >
               Continue to Dashboard
+            </Button>
+            <Button onClick={handleForceReload} variant="outline" className="w-full mt-2">
+              Reload Page
             </Button>
           </div>
         ) : (

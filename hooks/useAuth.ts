@@ -172,7 +172,7 @@ export default function useAuth() {
               // No need for another timeout since we already prefetched the data
               setIsCheckingAuth(false);
             });
-          }, 500);
+          }, 300);
         } catch (error) {
           console.error('Error during authentication with backend:', error);
           toast.error('Authentication failed with our system. Please try again.');
