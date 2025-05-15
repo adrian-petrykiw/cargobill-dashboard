@@ -281,8 +281,7 @@ export default function OrganizationTab() {
             <div className="text-center py-8">
               <h3 className="font-medium text-gray-700 mb-2">Business Verification Required</h3>
               <p className="text-sm text-gray-500 mb-4">
-                Verify your business to unlock full functionality and ensure compliance with
-                regulations.
+                Verify your business to unlock full functionality
               </p>
 
               {isVerifying ? (
@@ -338,9 +337,7 @@ export default function OrganizationTab() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-sm text-gray-500">
-                You'll be able to manage your business documents after verification.
-              </p>
+              <p className="text-sm text-gray-500">No documents available</p>
             </div>
           )}
         </CardContent>

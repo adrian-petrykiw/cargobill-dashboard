@@ -136,7 +136,7 @@ export default function LinkedAccountsTab() {
             </div>
           ) : (
             // <div className="text-center py-8">
-            //   <p className="text-sm text-gray-500 mb-4">No bank accounts linked yet.</p>
+            //   <p className="text-sm text-gray-500 mb-4">No bank accounts linked</p>
             //   <Button
             //     onClick={() => {
             //       setPaymentMethodTab('bank');
@@ -148,8 +148,8 @@ export default function LinkedAccountsTab() {
             // </div>
 
             <div className="text-center py-8">
-              <p className="text-sm text-gray-500 mb-4">No bank accounts linked yet.</p>
-              <Button onClick={handleAddPaymentMethod}>Add Bank Account</Button>
+              <p className="text-sm text-gray-500 mb-4">No bank accounts added</p>
+              <Button onClick={handleAddPaymentMethod}>Add New Bank Account +</Button>
             </div>
           )}
         </CardContent>
@@ -158,7 +158,7 @@ export default function LinkedAccountsTab() {
       {/* Credit Cards Section */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-md font-medium">Credit Cards</CardTitle>
+          <CardTitle className="text-md font-medium">Cards</CardTitle>
         </CardHeader>
         <CardContent>
           {paymentMethodsLinked ? (
@@ -185,7 +185,7 @@ export default function LinkedAccountsTab() {
             </div>
           ) : (
             // <div className="text-center py-8">
-            //   <p className="text-sm text-gray-500 mb-4">No credit cards linked yet.</p>
+            //   <p className="text-sm text-gray-500 mb-4">No cards linked</p>
             //   <Button
             //     onClick={() => {
             //       setPaymentMethodTab('card');
@@ -197,8 +197,8 @@ export default function LinkedAccountsTab() {
             // </div>
 
             <div className="text-center py-8">
-              <p className="text-sm text-gray-500 mb-4">No credit cards linked yet.</p>
-              <Button onClick={handleAddPaymentMethod}>Add Credit Card</Button>
+              <p className="text-sm text-gray-500 mb-4">No cards added</p>
+              <Button onClick={handleAddPaymentMethod}>Add New Card +</Button>
             </div>
           )}
         </CardContent>
@@ -215,7 +215,7 @@ export default function LinkedAccountsTab() {
           <Tabs value={paymentMethodTab} onValueChange={setPaymentMethodTab}>
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="bank">Bank Account</TabsTrigger>
-              <TabsTrigger value="card">Credit Card</TabsTrigger>
+              <TabsTrigger value="card">Card</TabsTrigger>
             </TabsList>
 
             <TabsContent value="bank">
@@ -269,7 +269,7 @@ export default function LinkedAccountsTab() {
                     Cancel
                   </Button>
                   <Button type="submit" disabled={bankForm.formState.isSubmitting}>
-                    {bankForm.formState.isSubmitting ? 'Adding...' : 'Add Bank Account'}
+                    {bankForm.formState.isSubmitting ? 'Linking...' : 'Link'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -332,7 +332,7 @@ export default function LinkedAccountsTab() {
                     Cancel
                   </Button>
                   <Button type="submit" disabled={creditCardForm.formState.isSubmitting}>
-                    {creditCardForm.formState.isSubmitting ? 'Adding...' : 'Add Credit Card'}
+                    {creditCardForm.formState.isSubmitting ? 'Linking...' : 'Link'}
                   </Button>
                 </DialogFooter>
               </form>
