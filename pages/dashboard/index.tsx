@@ -19,14 +19,14 @@ import { useOrganizations } from '@/hooks/useOrganizations';
 import { OrganizationSetupModal } from '@/components/onboarding/OnboardingSetupModal';
 import type { Organization } from '@/schemas/organization.schema';
 import { toast } from 'react-hot-toast';
+import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState';
 
 export default function Dashboard() {
   const user = useUserStore((state) => state.user);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const queryClient = useQueryClient();
-
-  // Use the organizations hook
   const { organizations, isLoading: isLoadingOrgs } = useOrganizations();
+  useSyncOnboardingState();
 
   // Determine if we should show onboarding
   useEffect(() => {

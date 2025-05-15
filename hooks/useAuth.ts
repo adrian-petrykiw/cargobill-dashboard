@@ -241,24 +241,58 @@ export default function useAuth() {
   };
 
   const logout = async () => {
-    clearUser();
-    clearOrganizations();
+    try {
+      queryClient.setQueryDefaults(['userOrganizations'], {
+        enabled: false,
+      });
+      queryClient.cancelQueries();
 
-    const clearOnboarding = useOnboardingStore.getState().clearOnboarding;
-    clearOnboarding();
+      await privyLogout();
 
-    const setSidebarMode = useSidebarStore.getState().setMode;
-    setSidebarMode('hover');
-    queryClient.clear();
-    localStorage.removeItem('user-storage');
-    localStorage.removeItem('organization-storage');
-    localStorage.removeItem('cargobill-onboarding');
-    localStorage.removeItem('sidebar-storage');
+      clearUser();
+      clearOrganizations();
 
-    await privyLogout();
-    router.push(ROUTES.AUTH.SIGNIN);
+      const clearOnboarding = useOnboardingStore.getState().clearOnboarding;
+      clearOnboarding();
+
+      const setSidebarMode = useSidebarStore.getState().setMode;
+      setSidebarMode('hover');
+
+      queryClient.clear();
+
+      localStorage.removeItem('user-storage');
+      localStorage.removeItem('organization-storage');
+      localStorage.removeItem('cargobill-onboarding');
+      localStorage.removeItem('sidebar-storage');
+
+      await router.push(ROUTES.AUTH.SIGNIN);
+    } catch (error) {
+      console.error('Error during logout:', error);
+
+      queryClient.setQueryDefaults(['userOrganizations'], {
+        enabled: false,
+      });
+      queryClient.cancelQueries();
+
+      clearUser();
+      clearOrganizations();
+
+      const clearOnboarding = useOnboardingStore.getState().clearOnboarding;
+      clearOnboarding();
+
+      const setSidebarMode = useSidebarStore.getState().setMode;
+      setSidebarMode('hover');
+
+      queryClient.clear();
+      localStorage.removeItem('user-storage');
+      localStorage.removeItem('organization-storage');
+      localStorage.removeItem('cargobill-onboarding');
+      localStorage.removeItem('sidebar-storage');
+
+      toast.error('Logout error. Please refresh the page.');
+      await router.push(ROUTES.AUTH.SIGNIN);
+    }
   };
-
   return {
     login,
     logout,

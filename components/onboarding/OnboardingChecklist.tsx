@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { ROUTES } from '@/constants/routes';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { toast } from 'react-hot-toast';
+import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState';
 
 interface OnboardingTaskProps {
   title: string;
@@ -46,6 +47,8 @@ const OnboardingTask = ({
 
 export default function OnboardingChecklist() {
   const router = useRouter();
+  useSyncOnboardingState();
+
   const {
     businessVerified,
     paymentMethodsLinked,
@@ -72,7 +75,7 @@ export default function OnboardingChecklist() {
     // This would open the send payment modal
     // For now, just navigate to dashboard
     // router.push(ROUTES.DASHBOARD);
-    // In a real implementation, you would call some function to open the modal
+    // In real implementation, call some function to open the modal
     // openSendPaymentModal();
 
     toast.error(`Please complete business verification`, {
@@ -86,7 +89,7 @@ export default function OnboardingChecklist() {
     // This would open the payment request modal
     // For now, just navigate to dashboard
     // router.push(ROUTES.DASHBOARD);
-    // In a real implementation, you would call some function to open the modal
+    // In real implementation, call some function to open the modal
     // openPaymentRequestModal();
     toast.error(`Please complete business verification`, {
       duration: 3000,

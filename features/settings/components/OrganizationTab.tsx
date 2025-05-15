@@ -12,12 +12,15 @@ import axios from 'axios';
 import footprint from '@onefootprint/footprint-js';
 import Spinner from '@/components/common/Spinner';
 import { getCountryNameFromAlpha3 } from '@/lib/helpers/countryCodeUtils';
+import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState'; // Add this import
 
 export default function OrganizationTab() {
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
-  const { setBusinessVerified } = useOnboardingStore();
   const { organization, isLoading, refetch } = useOrganizations();
+
+  // Use the sync hook instead of manual synchronization
+  useSyncOnboardingState();
 
   // Determine business verification status from organization data with proper null check
   const isBusinessVerified = !!(
@@ -43,20 +46,8 @@ export default function OrganizationTab() {
     return '';
   };
 
-  // Sync the onboarding store with the organization verification status
-  useEffect(() => {
-    if (organization) {
-      console.log('Organization verification status:', {
-        verificationStatus: organization.verification_status,
-        lastVerifiedAt: organization.last_verified_at,
-        isVerified: isBusinessVerified,
-        country: organization.country,
-      });
-
-      // Update the onboarding store to match the actual verification status
-      setBusinessVerified(isBusinessVerified);
-    }
-  }, [organization, isBusinessVerified, setBusinessVerified]);
+  // We can remove the manual synchronization effect since we're using the hook now
+  // This prevents duplicate synchronization
 
   // Launch Footprint verification flow directly
   const launchFootprintVerification = async () => {
