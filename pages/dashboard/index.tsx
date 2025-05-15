@@ -101,9 +101,9 @@ export default function Dashboard() {
         {/* Add Onboarding Checklist */}
         <OnboardingChecklist />
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Overview</h1>
-          <div className="flex space-x-3">
+        <div className="flex items-end justify-between ">
+          <h1 className="text-xl font-semibold mb-[-8px] ">Overview</h1>
+          <div className="flex space-x-3 pb-0 ">
             <Button
               className="min-w-[12rem] bg-tertiary hover:bg-blue-600"
               onClick={() => {
@@ -151,7 +151,17 @@ export default function Dashboard() {
                   >
                     Deposit +
                   </Button>
-                  <Button variant="link" className="text-xs p-0 h-auto">
+                  <Button
+                    variant="link"
+                    className="text-xs p-0 h-auto"
+                    onClick={() => {
+                      toast.error(`Please complete business verification`, {
+                        duration: 3000,
+                        position: 'top-center',
+                        icon: '🔒',
+                      });
+                    }}
+                  >
                     Withdraw -
                   </Button>
                 </div>
@@ -238,9 +248,9 @@ export default function Dashboard() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-md font-medium">Recent Activity</h2>
-            <Button variant="link" className="text-xs p-0 h-auto">
+            {/* <Button variant="link" className="text-xs p-0 h-auto">
               View all
-            </Button>
+            </Button> */}
           </div>
 
           {/* <Card className="p-0 overflow-hidden shadow-sm">
