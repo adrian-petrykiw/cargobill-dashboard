@@ -851,26 +851,22 @@ export const footprintService = {
     try {
       const client = this.initialize();
 
-      // Format for proper API structure - this is the key fix
-      const vaultData: VaultData = {
-        bank: {
-          primary: {
-            ach_account_number: bankData.accountNumber,
-            ach_routing_number: bankData.routingNumber,
-            name: bankData.accountHolderName,
-            institution_name: bankData.bankName,
-          } as BankPrimary,
-        },
+      // Use custom fields for bank storage
+      const vaultData: Record<string, any> = {
+        'custom.bank_primary_account_number': bankData.accountNumber,
+        'custom.bank_primary_routing_number': bankData.routingNumber,
+        'custom.bank_primary_name': bankData.accountHolderName,
+        'custom.bank_primary_institution_name': bankData.bankName,
       };
 
       // Add account type if provided
       if (bankData.accountType) {
-        vaultData.bank!.primary.account_type = bankData.accountType;
+        vaultData['custom.bank_primary_account_type'] = bankData.accountType;
       }
 
       // Add bank country if provided
       if (bankData.bankCountry) {
-        vaultData.bank!.primary.bank_country = bankData.bankCountry;
+        vaultData['custom.bank_primary_bank_country'] = bankData.bankCountry;
       }
 
       console.log('Sending bank data to Footprint:', JSON.stringify(vaultData, null, 2));
@@ -998,9 +994,13 @@ export const footprintService = {
           (cardPatterns[0].test(field) || cardPatterns[1].test(field)) && availableFields[field],
       );
 
-      // Custom card fields pattern
+      // Custom field patterns
       const customCardFields = Object.keys(availableFields).filter(
         (field) => field.startsWith('custom.card_primary_') && availableFields[field],
+      );
+
+      const customBankFields = Object.keys(availableFields).filter(
+        (field) => field.startsWith('custom.bank_primary_') && availableFields[field],
       );
 
       // Initialize result containers
@@ -1327,6 +1327,62 @@ export const footprintService = {
         }
       }
 
+      // Process custom bank fields
+      if (customBankFields.length > 0) {
+        try {
+          const data = await this.decryptBusinessVault({
+            businessId,
+            fields: customBankFields,
+            reason: `${reason} - Custom bank data`,
+          });
+
+          // Format the bank account data
+          const accountData: Record<string, any> = {
+            id: 'primary',
+          };
+
+          // Process each field
+          for (const field of customBankFields) {
+            const fieldName = field.replace('custom.bank_primary_', '');
+
+            // Map field names
+            if (fieldName === 'name') {
+              accountData['account_holder_name'] = data[field];
+            } else if (fieldName === 'institution_name') {
+              accountData['bank_name'] = data[field];
+            } else if (fieldName === 'account_number') {
+              accountData['account_number'] = data[field];
+            } else if (fieldName === 'routing_number') {
+              accountData['routing_number'] = data[field];
+            } else if (fieldName === 'bank_country') {
+              accountData['bank_country'] = data[field];
+            } else if (fieldName === 'account_type') {
+              accountData['account_type'] = data[field];
+            } else {
+              accountData[fieldName] = data[field];
+            }
+          }
+
+          // Only add if we have essential account info
+          if (data['custom.bank_primary_account_number'] || data['custom.bank_primary_name']) {
+            // Mask account number for security
+            if (data['custom.bank_primary_account_number']) {
+              const fullNumber = data['custom.bank_primary_account_number'];
+              accountData.masked_account_number = '••••' + fullNumber.slice(-4);
+            }
+
+            // Don't include sensitive data
+            if (accountData.account_number) delete accountData.account_number;
+            if (accountData.routing_number) delete accountData.routing_number;
+
+            bankAccounts.push(accountData);
+          }
+        } catch (error) {
+          console.warn(`Error decrypting custom bank fields:`, error);
+          // Continue with other methods
+        }
+      }
+
       return { bankAccounts, cards };
     } catch (error) {
       console.error(`Error getting payment methods for business: ${businessId}`, error);
@@ -1357,11 +1413,18 @@ export const footprintService = {
       // Check which fields exist
       const availableFields = await this.checkBusinessVaultFields(businessId);
 
-      // Define customCardFields at the top level scope so it's available throughout the function
+      // Define custom fields at the top level scope
       const customCardFields =
         methodType === 'card'
           ? Object.keys(availableFields).filter(
               (field) => field.startsWith('custom.card_primary_') && availableFields[field],
+            )
+          : [];
+
+      const customBankFields =
+        methodType === 'bank'
+          ? Object.keys(availableFields).filter(
+              (field) => field.startsWith('custom.bank_primary_') && availableFields[field],
             )
           : [];
 
@@ -1374,6 +1437,21 @@ export const footprintService = {
         });
 
         console.log('Removing custom card fields:', Object.keys(vaultUpdate));
+
+        // Update the vault to remove the fields
+        await client.patch(`/businesses/${businessId}/vault`, vaultUpdate);
+        return true;
+      }
+
+      // If removing a bank with methodId "primary" using custom fields
+      if (methodType === 'bank' && methodId === 'primary' && customBankFields.length > 0) {
+        // Create a payload to set all fields to null
+        const vaultUpdate: Record<string, any> = {};
+        customBankFields.forEach((field) => {
+          vaultUpdate[field] = null;
+        });
+
+        console.log('Removing custom bank fields:', Object.keys(vaultUpdate));
 
         // Update the vault to remove the fields
         await client.patch(`/businesses/${businessId}/vault`, vaultUpdate);
@@ -1400,7 +1478,10 @@ export const footprintService = {
 
         if (
           legacyFieldsToRemove.length === 0 &&
-          !(methodType === 'card' && customCardFields.length > 0)
+          !(
+            (methodType === 'card' && customCardFields.length > 0) ||
+            (methodType === 'bank' && customBankFields.length > 0)
+          )
         ) {
           throw new FootprintServiceError(
             'PAYMENT_METHOD_NOT_FOUND',
