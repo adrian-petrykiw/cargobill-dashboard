@@ -409,7 +409,7 @@ export default function OrganizationTab() {
                         <p className="text-sm text-gray-500">{`illini_logistics_${docType}.pdf`}</p>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => downloadDocument(docType)}>
-                        View
+                        Download
                       </Button>
                     </div>
                   ))
