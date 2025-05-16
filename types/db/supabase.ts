@@ -236,6 +236,7 @@ export type Database = {
           operational_wallet: Json | null
           preferences: Json | null
           primary_address: Json | null
+          ramping_entity_id: string | null
           subscription_tier: string
           treasury_wallet: Json | null
           updated_at: string | null
@@ -264,6 +265,7 @@ export type Database = {
           operational_wallet?: Json | null
           preferences?: Json | null
           primary_address?: Json | null
+          ramping_entity_id?: string | null
           subscription_tier?: string
           treasury_wallet?: Json | null
           updated_at?: string | null
@@ -292,6 +294,7 @@ export type Database = {
           operational_wallet?: Json | null
           preferences?: Json | null
           primary_address?: Json | null
+          ramping_entity_id?: string | null
           subscription_tier?: string
           treasury_wallet?: Json | null
           updated_at?: string | null

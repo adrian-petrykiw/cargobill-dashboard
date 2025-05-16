@@ -195,7 +195,7 @@ export default function Dashboard() {
           <Card className="shadow-sm">
             <CardHeader className="pb-0">
               <div className="flex items-between justify-between">
-                <h2 className="text-md font-medium">Cash Flow</h2>
+                <h2 className="text-md font-medium">Cashflow</h2>
                 <div className="text-xs text-gray-500">Period: Last Month</div>
               </div>
             </CardHeader>

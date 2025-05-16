@@ -25,6 +25,7 @@ export const organizationSchema = z.object({
   operational_wallet: jsonSchema.nullable().optional(),
   preferences: jsonSchema.nullable().optional(),
   primary_address: jsonSchema.nullable().optional(),
+  ramping_entity_id: z.string().nullable().optional(),
   subscription_tier: z.string().default('free'),
   treasury_wallet: jsonSchema.nullable().optional(),
   updated_at: z.string().nullable().optional(),
@@ -47,6 +48,7 @@ export const createOrganizationSchema = organizationSchema
     invited_at: true,
     invited_by: true,
     last_verified_at: true,
+    ramping_entity_id: true,
     treasury_wallet: true,
     yield_wallet: true,
   })
