@@ -1,6 +1,6 @@
 # CargoBill Dashboard
 
-Realtime cross-border logistics payments 24/7, anytime, anywhere in the world
+Realtime cross-border supply chain payments 24/7, anytime, anywhere in the world
 
 
 
