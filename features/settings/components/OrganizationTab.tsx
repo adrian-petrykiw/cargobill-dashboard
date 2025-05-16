@@ -6,17 +6,23 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useOnboardingStore } from '@/stores/onboardingStore';
 import { useOrganizations } from '@/hooks/useOrganizations';
 import SimpleVerificationForm from './SimpleVerificationForm';
+import FootprintVerificationForm from './FootprintVerificationForm';
+import OrganizationDetails from './OrganizationDetails';
 import '@onefootprint/footprint-js/dist/footprint-js.css';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import footprint from '@onefootprint/footprint-js';
 import Spinner from '@/components/common/Spinner';
 import { getCountryNameFromAlpha3 } from '@/lib/helpers/countryCodeUtils';
-import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState'; // Add this import
+import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState';
+import { formatDocumentName, formatBusinessType } from '@/lib/formatters/business';
 
 export default function OrganizationTab() {
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [organizationData, setOrganizationData] = useState<any>(null);
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   const { organization, isLoading, refetch } = useOrganizations();
 
   // Use the sync hook instead of manual synchronization
@@ -46,8 +52,36 @@ export default function OrganizationTab() {
     return '';
   };
 
-  // We can remove the manual synchronization effect since we're using the hook now
-  // This prevents duplicate synchronization
+  // Fetch detailed organization data when verified
+  useEffect(() => {
+    const fetchOrganizationData = async () => {
+      if (!organization?.id || !isBusinessVerified) return;
+
+      try {
+        setIsLoadingData(true);
+        const { data } = await axios.get(`/api/organizations/${organization.id}/data`);
+
+        if (!data.success) {
+          throw new Error(data.error?.message || 'Failed to fetch organization data');
+        }
+
+        setOrganizationData(data.data);
+      } catch (err) {
+        console.error('Error fetching organization data:', err);
+        if (axios.isAxiosError(err) && err.response?.data?.error?.message) {
+          setDataError(err.response.data.error.message);
+        } else if (err instanceof Error) {
+          setDataError(err.message);
+        } else {
+          setDataError('An unknown error occurred');
+        }
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    fetchOrganizationData();
+  }, [organization?.id, isBusinessVerified]);
 
   // Launch Footprint verification flow directly
   const launchFootprintVerification = async () => {
@@ -193,6 +227,32 @@ export default function OrganizationTab() {
     }
   };
 
+  // Function to download a document
+  const downloadDocument = async (documentType: string) => {
+    if (!organization?.id) return;
+
+    try {
+      const response = await axios.get(
+        `/api/organizations/${organization.id}/document?type=${documentType}`,
+        { responseType: 'blob' },
+      );
+
+      // Create a blob URL and trigger download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${documentType}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading document:', err);
+      toast.error('Failed to download document. Please try again later.');
+    }
+  };
+
   // Show loading state while organization data is loading
   if (isLoading) {
     return (
@@ -219,57 +279,84 @@ export default function OrganizationTab() {
         </CardHeader>
         <CardContent>
           {isBusinessVerified ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Legal Name</h3>
-                <p>{organization?.name || 'N/A'}</p>
+            isLoadingData ? (
+              <div className="text-center py-8">
+                <Spinner className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Loading business details...</p>
               </div>
+            ) : dataError ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-red-500 mb-2">{dataError}</p>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  Try Again
+                </Button>
+              </div>
+            ) : (
+              // Display business information from Footprint
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Legal Name</h3>
+                  <p>{organizationData?.business_data?.name || organization?.name || 'N/A'}</p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">EIN/Tax ID</h3>
-                <p>••••••1234</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">EIN/Tax ID</h3>
+                  <p>
+                    {organizationData?.business_data?.tin
+                      ? '••••••' + organizationData.business_data.tin.slice(-4)
+                      : '••••••1234'}
+                  </p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Business Type</h3>
-                <p>Limited Liability Company</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Business Type</h3>
+                  <p>
+                    {organizationData?.business_data?.corporation_type
+                      ? formatBusinessType(organizationData.business_data.corporation_type)
+                      : 'Limited Liability Company'}
+                  </p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Address</h3>
-                <p>123 W Main St.</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Address</h3>
+                  <p>{organizationData?.business_data?.address_line1 || '123 W Main St.'}</p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">City</h3>
-                <p>Chicago</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">City</h3>
+                  <p>{organizationData?.business_data?.city || 'Chicago'}</p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">State/Province</h3>
-                <p>IL</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">State/Province</h3>
+                  <p>{organizationData?.business_data?.state || 'IL'}</p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">ZIP/Postal Code</h3>
-                <p>60623</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">ZIP/Postal Code</h3>
+                  <p>{organizationData?.business_data?.zip || '60623'}</p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Country</h3>
-                <p>{organization?.country || 'Not specified'}</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Country</h3>
+                  <p>
+                    {organizationData?.business_data?.country ||
+                      organization?.country ||
+                      'Not specified'}
+                  </p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Phone Number</h3>
-                <p>+1 312 675 8769</p>
-              </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Phone Number</h3>
+                  <p>{organizationData?.business_data?.phone_number || '+1 312 675 8769'}</p>
+                </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Website</h3>
-                <p>www.illinilogistics.com</p>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Website</h3>
+                  <p>{organizationData?.business_data?.website || 'www.illinilogistics.com'}</p>
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <div className="text-center py-8">
               <h3 className="font-medium text-gray-700 mb-2">Business Verification Required</h3>
@@ -303,31 +390,40 @@ export default function OrganizationTab() {
         </CardHeader>
         <CardContent>
           {isBusinessVerified ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-2">
-                <div>
-                  <h3 className="font-medium">Certificate of Incorporation</h3>
-                  <p className="text-sm text-gray-500">illini_logistics_articles_of_incorp.pdf</p>
-                </div>
-                <Button variant="outline" size="sm">
-                  View
-                </Button>
+            isLoadingData ? (
+              <div className="text-center py-8">
+                <Spinner className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Loading documents...</p>
               </div>
-
-              <div className="flex items-center justify-between border-b pb-2">
-                <div>
-                  <h3 className="font-medium">Proof of Beneficial Owners</h3>
-                  <p className="text-sm text-gray-500">illini_logistics_tax_certificate.pdf</p>
-                </div>
-                <Button variant="outline" size="sm">
-                  View
-                </Button>
+            ) : dataError ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-red-500">{dataError}</p>
               </div>
-
-              <Button variant="outline" className="w-full">
-                Upload New Document
-              </Button>
-            </div>
+            ) : (
+              <div className="space-y-4">
+                {organizationData?.available_documents?.length > 0 ? (
+                  organizationData.available_documents.map((docType: string) => (
+                    <div key={docType} className="flex items-center justify-between border-b pb-2">
+                      <div>
+                        <h3 className="font-medium">{formatDocumentName(docType)}</h3>
+                        <p className="text-sm text-gray-500">{`illini_logistics_${docType}.pdf`}</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => downloadDocument(docType)}>
+                        View
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <div>
+                        <p className="text-sm text-gray-500">Document data error</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
           ) : (
             <div className="text-center py-8">
               <p className="text-sm text-gray-500">No documents available</p>

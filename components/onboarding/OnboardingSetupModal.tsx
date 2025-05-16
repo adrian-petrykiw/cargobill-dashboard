@@ -153,9 +153,6 @@ export function OrganizationSetupModal({
             >
               Continue to Dashboard
             </Button>
-            <Button onClick={handleForceReload} variant="outline" className="w-full mt-2">
-              Reload Page
-            </Button>
           </div>
         ) : (
           <Form {...form}>

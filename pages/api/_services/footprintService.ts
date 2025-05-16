@@ -183,33 +183,6 @@ export const footprintService = {
   },
 
   /**
-   * Create a new business vault
-   */
-  async createBusiness(params: CreateBusinessParams = {}): Promise<FootprintBusinessData> {
-    try {
-      const client = this.initialize();
-
-      const headers: Record<string, string> = {};
-
-      if (params.externalId) {
-        headers['x-external-id'] = params.externalId;
-      }
-
-      const response = await client.post('/businesses', params.initialData || {}, { headers });
-
-      return response.data as FootprintBusinessData;
-    } catch (error) {
-      if (error instanceof FootprintServiceError) {
-        throw error;
-      }
-
-      throw new FootprintServiceError('CREATE_BUSINESS_FAILED', 'Failed to create business vault', {
-        originalError: error instanceof Error ? error.message : String(error),
-      });
-    }
-  },
-
-  /**
    * Get business details
    */
   async getBusinessDetails(businessId: string): Promise<FootprintBusinessDetailsResponse> {
@@ -509,6 +482,313 @@ export const footprintService = {
         `Failed to create client token for business: ${businessId}`,
         { originalError: error instanceof Error ? error.message : String(error) },
       );
+    }
+  },
+
+  /**
+   * Use Vault Proxy to decrypt business data
+   */
+  async proxyDecryptBusinessData(
+    businessId: string,
+    reason: string = 'Organization details view',
+  ): Promise<Record<string, any>> {
+    try {
+      const client = this.initialize();
+
+      // First, check which fields actually exist in the vault
+      const availableFields = await this.checkBusinessVaultFields(businessId);
+
+      // Create the template only with fields that exist
+      const templateObj: Record<string, string> = {};
+
+      // Map of field names to their template equivalents
+      const fieldMap: Record<string, string> = {
+        'business.name': 'name',
+        'business.dba': 'dba',
+        'business.tin': 'tin',
+        'business.phone_number': 'phone_number',
+        'business.address_line1': 'address_line1',
+        'business.address_line2': 'address_line2',
+        'business.city': 'city',
+        'business.state': 'state',
+        'business.zip': 'zip',
+        'business.country': 'country',
+        'business.corporation_type': 'corporation_type',
+        'business.formation_state': 'formation_state',
+        'business.formation_date': 'formation_date',
+        'business.website': 'website',
+      };
+
+      // Only include fields that exist in the vault
+      Object.entries(fieldMap).forEach(([fieldName, templateName]) => {
+        if (availableFields[fieldName]) {
+          templateObj[templateName] = `{{ ${fieldName} }}`;
+        }
+      });
+
+      // If no fields exist, return an empty object
+      if (Object.keys(templateObj).length === 0) {
+        return {};
+      }
+
+      // Convert to JSON template string
+      const template = JSON.stringify(templateObj);
+
+      const response = await client.post('/vault_proxy/reflect', template, {
+        headers: {
+          'x-fp-id': businessId,
+          'x-fp-proxy-access-reason': reason,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return JSON.parse(response.data) as Record<string, any>;
+    } catch (error) {
+      // If vault proxy fails, fall back to direct decryption
+      if (error instanceof FootprintServiceError) {
+        console.warn('Vault proxy failed, falling back to direct decryption:', error.message);
+
+        try {
+          // Use the regular decrypt endpoint which is more forgiving
+          const fields = [
+            'business.name',
+            'business.dba',
+            'business.tin',
+            'business.phone_number',
+            'business.address_line1',
+            'business.address_line2',
+            'business.city',
+            'business.state',
+            'business.zip',
+            'business.country',
+            'business.corporation_type',
+            'business.formation_state',
+            'business.formation_date',
+            'business.website',
+          ];
+
+          return await this.decryptBusinessVault({
+            businessId,
+            fields,
+            reason,
+          });
+        } catch (decryptError) {
+          console.error('Both vault proxy and direct decryption failed:', decryptError);
+          throw new FootprintServiceError(
+            'BUSINESS_DATA_RETRIEVAL_FAILED',
+            'Could not retrieve business data using any available method',
+            { proxyError: error, decryptError },
+          );
+        }
+      }
+
+      throw new FootprintServiceError(
+        'PROXY_DECRYPT_BUSINESS_DATA_FAILED',
+        `Failed to decrypt business data using vault proxy for: ${businessId}`,
+        { originalError: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  },
+
+  /**
+   * Use direct decryption to get business data
+   */
+  async getBusinessData(
+    businessId: string,
+    reason: string = 'Organization details view',
+  ): Promise<Record<string, any>> {
+    try {
+      const client = this.initialize();
+
+      // Check which fields exist first
+      let availableFields: Record<string, boolean>;
+      try {
+        availableFields = await this.checkBusinessVaultFields(businessId);
+        console.log(`Available fields for ${businessId}:`, availableFields);
+      } catch (error) {
+        console.error(`Error checking fields for ${businessId}:`, error);
+        availableFields = {};
+      }
+
+      // Standard business fields to check
+      const standardFields = [
+        'business.name',
+        'business.dba',
+        'business.tin',
+        'business.phone_number',
+        'business.address_line1',
+        'business.address_line2',
+        'business.city',
+        'business.state',
+        'business.zip',
+        'business.country',
+        'business.corporation_type',
+        'business.formation_state',
+        'business.formation_date',
+        'business.website',
+      ];
+
+      // Only include fields that exist or standard fields if check failed
+      const fields =
+        Object.keys(availableFields).length > 0
+          ? standardFields.filter((field) => availableFields[field])
+          : standardFields;
+
+      // If no fields exist, return an empty object
+      if (fields.length === 0) {
+        console.warn(`No fields available for ${businessId}`);
+        return {};
+      }
+
+      console.log(`Decrypting fields for ${businessId}:`, fields);
+
+      try {
+        // Use the standard decrypt endpoint instead of proxy
+        const data = await this.decryptBusinessVault({
+          businessId,
+          fields,
+          reason,
+        });
+
+        // Normalize the response to ensure we have a clean object structure
+        const result: Record<string, any> = {};
+        Object.entries(data).forEach(([key, value]) => {
+          // Strip the "business." prefix for cleaner object structure
+          const normalizedKey = key.replace('business.', '');
+          result[normalizedKey] = value;
+        });
+
+        return result;
+      } catch (error) {
+        console.error(`Error decrypting vault data for ${businessId}:`, error);
+
+        // If we get specific field errors, try one field at a time
+        if (error instanceof FootprintServiceError && error.code === 'BAD_REQUEST') {
+          console.log('Trying individual field decryption as fallback');
+
+          // Try to decrypt each field individually
+          const result: Record<string, any> = {};
+          for (const field of fields) {
+            try {
+              const singleFieldData = await this.decryptBusinessVault({
+                businessId,
+                fields: [field],
+                reason: `${reason} (individual field)`,
+              });
+
+              const normalizedKey = field.replace('business.', '');
+              result[normalizedKey] = singleFieldData[field];
+            } catch (fieldError) {
+              console.warn(`Failed to decrypt field ${field}:`, fieldError);
+              // Continue with other fields
+            }
+          }
+
+          return result;
+        }
+
+        throw error;
+      }
+    } catch (error) {
+      console.error(`Final error getting business data for ${businessId}:`, error);
+
+      if (error instanceof FootprintServiceError) {
+        throw error;
+      }
+
+      throw new FootprintServiceError(
+        'BUSINESS_DATA_RETRIEVAL_FAILED',
+        `Failed to retrieve business data for: ${businessId}`,
+        { originalError: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  },
+
+  /**
+   * Get document data directly
+   */
+  async getBusinessDocument(
+    businessId: string,
+    documentType: string,
+    reason: string = 'Document download',
+  ): Promise<Buffer> {
+    try {
+      const client = this.initialize();
+
+      // The correct field name pattern for your documents
+      const fieldName = `document.custom.${documentType}`;
+
+      console.log(`Trying to fetch document using field: ${fieldName}`);
+
+      // Check if this field exists
+      const fields = await this.checkBusinessVaultFields(businessId, [fieldName]);
+
+      if (!fields[fieldName]) {
+        throw new FootprintServiceError(
+          'DOCUMENT_NOT_FOUND',
+          `Document "${documentType}" not found for business: ${businessId}`,
+          {},
+        );
+      }
+
+      // Decrypt the document field
+      const data = await this.decryptBusinessVault({
+        businessId,
+        fields: [fieldName],
+        reason,
+      });
+
+      if (!data[fieldName]) {
+        throw new FootprintServiceError(
+          'DOCUMENT_EMPTY',
+          `Document "${documentType}" exists but has no content`,
+          {},
+        );
+      }
+
+      // The document should be base64 encoded
+      return Buffer.from(data[fieldName], 'base64');
+    } catch (error) {
+      console.error(`Error getting document for ${businessId}, type ${documentType}:`, error);
+
+      if (error instanceof FootprintServiceError) {
+        throw error;
+      }
+
+      throw new FootprintServiceError(
+        'GET_BUSINESS_DOCUMENT_FAILED',
+        `Failed to get document for business: ${businessId}, type: ${documentType}`,
+        { originalError: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  },
+
+  /**
+   * More robustly check available document types
+   */
+  async getBusinessDocumentTypes(businessId: string): Promise<string[]> {
+    try {
+      let availableTypes: string[] = [];
+
+      // Check for custom document fields in the vault
+      const allFields = await this.checkBusinessVaultFields(businessId);
+      console.log(`All fields for ${businessId}:`, allFields);
+
+      // Pattern to extract document names from document.custom.* fields
+      const documentFieldPattern = /^document\.custom\.(.+)$/;
+
+      for (const field of Object.keys(allFields)) {
+        const match = field.match(documentFieldPattern);
+        if (match && match[1]) {
+          // The actual document name is after document.custom.
+          availableTypes.push(match[1]);
+        }
+      }
+
+      return availableTypes;
+    } catch (error) {
+      console.error(`Error getting document types for ${businessId}:`, error);
+      return [];
     }
   },
 };
