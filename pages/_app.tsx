@@ -9,6 +9,7 @@ import LocalPrivyProvider from '@/components/common/LocalPrivyProvider';
 import { NotificationsProvider } from '@/components/providers/NotificationProvider';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/next';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +55,7 @@ export default function App({ Component, pageProps }: AppProps) {
         </NotificationsProvider>
         {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
+      <Analytics />
     </LocalPrivyProvider>
   );
 }
