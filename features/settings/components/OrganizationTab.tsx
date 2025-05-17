@@ -35,6 +35,9 @@ export default function OrganizationTab() {
     organization.verification_status === 'verified'
   );
 
+  // Determine subscription tier based on organization data
+  const subscriptionTier = organization?.subscription_tier || 'free';
+
   // Determine if the company is US-based (only if country exists)
   const isUSBased = organization?.country
     ? ['USA', 'US', 'United States', 'United States of America'].includes(organization.country)
@@ -82,6 +85,20 @@ export default function OrganizationTab() {
 
     fetchOrganizationData();
   }, [organization?.id, isBusinessVerified]);
+
+  // Handle upgrade button click
+  const handleUpgradeClick = () => {
+    toast.success('Contact us at support@cargobill.co to upgrade your tier', { duration: 5000 });
+  };
+
+  // Handle fee schedule button click - open fee schedule in new tab
+  const handleFeeScheduleClick = () => {
+    const feeScheduleUrl = isBusinessVerified
+      ? 'https://www.notion.so/CargoBill-Complete-Fee-Schedule-1f6df843707380cfbcb5f4375614c3d5'
+      : 'https://cargobill.notion.site/CargoBill-Basic-Fee-Schedule-1f6df8437073808e91d8d0016ac8c794';
+
+    window.open(feeScheduleUrl, '_blank');
+  };
 
   // Launch Footprint verification flow directly
   const launchFootprintVerification = async () => {
@@ -311,8 +328,53 @@ export default function OrganizationTab() {
     );
   }
 
+  // Get display name for subscription tier
+  const getSubscriptionTierDisplay = (tier: string) => {
+    switch (tier) {
+      case 'free':
+        return 'Free Tier';
+      case 'starter':
+        return 'Starter Tier';
+      case 'enterprise':
+        return 'Enterprise Tier';
+      case 'custom':
+        return 'Custom Tier';
+      default:
+        return 'Free Tier';
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Subscription Tier Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-md font-medium">Subscription Plan</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">
+                {getSubscriptionTierDisplay(subscriptionTier)}
+              </h3>
+              <p className="text-sm text-gray-500">
+                {isBusinessVerified
+                  ? 'Your business has been verified and your plan is active.'
+                  : 'Complete business verification to unlock all features.'}
+              </p>
+            </div>
+            <div className="flex space-x-2">
+              <Button variant="outline" size="sm" onClick={handleFeeScheduleClick}>
+                Fee Schedule
+              </Button>
+              <Button variant="default" size="sm" onClick={handleUpgradeClick}>
+                Upgrade
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-md font-medium">Business Information</CardTitle>
