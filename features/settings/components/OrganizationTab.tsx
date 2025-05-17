@@ -167,7 +167,8 @@ export default function OrganizationTab() {
     }
   };
 
-  // Handle verification button click
+  // In the OrganizationTab component, modify the handleVerificationClick function:
+
   const handleVerificationClick = () => {
     // Check if country is missing
     if (!organization?.country) {
@@ -180,8 +181,18 @@ export default function OrganizationTab() {
 
     // Different flow for US vs non-US companies
     if (isUSBased) {
-      // For US companies, launch Footprint directly
-      launchFootprintVerification();
+      // For US companies, first create the Zynk entity
+      createZynkEntity()
+        .then(() => {
+          // Then launch Footprint
+          launchFootprintVerification();
+        })
+        .catch((error) => {
+          console.error('Error creating Zynk entity:', error);
+          // Still launch Footprint even if Zynk entity creation fails
+          // We'll try again later during verification
+          launchFootprintVerification();
+        });
     } else {
       // For non-US companies, open our custom dialog
       toast.error(
@@ -191,11 +202,40 @@ export default function OrganizationTab() {
     }
   };
 
-  // Handle verification completion
+  // Add a new function to create Zynk entity
+  const createZynkEntity = async () => {
+    if (!organization?.id) {
+      throw new Error('Organization ID is missing');
+    }
+
+    try {
+      const response = await axios.post('/api/footprint/create-entity', {
+        organizationId: organization.id,
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to create Zynk entity');
+      }
+
+      return response.data.data;
+    } catch (error) {
+      console.error('Error creating Zynk entity:', error);
+      // Don't fail verification flow if Zynk entity creation fails
+      // We'll try again during the verification process
+    }
+  };
+
+  // And update the handleVerificationComplete function:
   const handleVerificationComplete = async (validationToken: string) => {
     setIsVerifying(true);
 
     try {
+      // First try to ensure we have a Zynk entity
+      await createZynkEntity().catch((error) => {
+        console.error('Error creating Zynk entity during verification completion:', error);
+        // Continue with validation even if entity creation fails
+      });
+
       // Send the validation token to your backend to validate and update verification status
       const response = await fetch('/api/footprint/validate-kyb', {
         method: 'POST',

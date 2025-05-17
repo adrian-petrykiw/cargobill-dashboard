@@ -29,7 +29,7 @@ const Spinner: React.FC<SpinnerProps> = ({ size = 'md', color = '#233CFF', class
           fill="none"
           stroke={color}
           strokeWidth="4"
-          strokeLinecap="butt"
+          strokeLinecap="round"
           style={{
             transformOrigin: 'center',
           }}

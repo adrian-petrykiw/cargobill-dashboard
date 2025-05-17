@@ -26,9 +26,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Pencil } from 'lucide-react';
+import { Pencil, KeyRound, AlertTriangle, ExternalLink } from 'lucide-react';
 import Spinner from '@/components/common/Spinner';
 import { SelectTimezone } from '@/components/SelectTimezone';
+// Add Privy imports
+import { usePrivy, type WalletWithMetadata } from '@privy-io/react-auth';
+import { useSolanaWallets } from '@privy-io/react-auth/solana';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Country {
   code: string;
@@ -38,6 +42,9 @@ interface Country {
 export default function ProfileTab() {
   const { profile, isLoading, updateProfile, isUpdating, getEmail } = useUserProfile();
   const [isEditing, setIsEditing] = useState(false);
+  // Add Privy hooks
+  const { ready: privyReady, authenticated, user } = usePrivy();
+  const { wallets, ready: walletsReady, exportWallet } = useSolanaWallets();
 
   const form = useForm<UpdateProfileRequest>({
     resolver: zodResolver(updateProfileSchema),
@@ -101,6 +108,33 @@ export default function ProfileTab() {
       setIsEditing(false);
     } catch (error) {
       console.error('Failed to update profile:', error);
+    }
+  };
+
+  // Get embedded wallet from the wallets array (connected wallets)
+  const embeddedWallet = walletsReady
+    ? wallets.find((wallet) => wallet.walletClientType === 'privy')
+    : undefined;
+
+  // Check if user has an embedded Solana wallet (both connected and linked)
+  const isAuthenticated = privyReady && authenticated;
+  const hasLinkedEmbeddedWallet =
+    isAuthenticated &&
+    user?.linkedAccounts?.some(
+      (account): account is WalletWithMetadata =>
+        account.type === 'wallet' &&
+        account.walletClientType === 'privy' &&
+        account.chainType === 'solana',
+    );
+
+  // Handle wallet export with address (if multiple wallets exist)
+  const handleExportWallet = () => {
+    if (embeddedWallet) {
+      exportWallet({ address: embeddedWallet.address });
+    } else {
+      // If no connected wallet is found but we know they have a linked wallet,
+      // just call exportWallet without address and let Privy handle it
+      exportWallet();
     }
   };
 
@@ -580,6 +614,82 @@ export default function ProfileTab() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Wallet Export Card */}
+      <Card className="shadow-sm">
+        {/* <CardHeader>
+          <CardTitle className="flex items-center text-lg font-medium">
+            <KeyRound className="mr-2 h-5 w-5" />
+            Wallet Security
+          </CardTitle>
+        </CardHeader> */}
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            {/* <p className="text-sm text-gray-600">
+              Your CargoBill account uses a Solana blockchain wallet to securely process payments
+              and manage transactions. You can export your wallet's private key for backup or to use
+              with external wallet providers like Phantom.
+            </p> */}
+
+            {walletsReady ? (
+              hasLinkedEmbeddedWallet || embeddedWallet ? (
+                <>
+                  <div className="py-2">
+                    <div className="text-sm text-gray-500 mb-1">Wallet Address</div>
+                    <div className="flex items-center">
+                      <code className="text-xs bg-gray-100 p-2 rounded font-mono w-full overflow-hidden text-ellipsis">
+                        {embeddedWallet?.address || 'Wallet address will be shown when connected'}
+                      </code>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
+                    <div className="text-sm text-yellow-700">
+                      Your private key provides complete access to your funds. Never share it with
+                      anyone.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      onClick={handleExportWallet}
+                      className="bg-slate-800 hover:bg-slate-900 text-white"
+                    >
+                      Export Wallet Private Key
+                    </Button>
+                    {/* <Button
+                      variant="outline"
+                      onClick={() => window.open('https://phantom.app/', '_blank')}
+                      className="flex items-center"
+                    >
+                      Phantom Wallet <ExternalLink className="ml-1 h-4 w-4" />
+                    </Button> */}
+                  </div>
+
+                  <p className="text-xs text-gray-500 mt-2">
+                    Note: CargoBill only supports exporting Solana wallets by private key, not seed
+                    phrase, to ensure that you maintain the same address.
+                  </p>
+                </>
+              ) : (
+                <Alert>
+                  <AlertTitle>No Embedded Wallet Found</AlertTitle>
+                  <AlertDescription>
+                    You don't have an embedded Solana wallet associated with your account. Please
+                    contact support if you believe this is an error.
+                  </AlertDescription>
+                </Alert>
+              )
+            ) : (
+              <div className="flex items-center justify-center p-4">
+                <Spinner className="mr-2" size="sm" />
+                <span className="text-sm">Loading wallet information...</span>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

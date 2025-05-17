@@ -17,15 +17,15 @@ import { useUserStore } from '@/stores/userStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOrganizations } from '@/hooks/useOrganizations';
 import { OrganizationSetupModal } from '@/components/onboarding/OnboardingSetupModal';
-import type { Organization } from '@/schemas/organization.schema';
 import { toast } from 'react-hot-toast';
 import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState';
+import { BusinessWalletCard } from '@/features/dashboard/components/BusinessWalletCard';
 
 export default function Dashboard() {
   const user = useUserStore((state) => state.user);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const queryClient = useQueryClient();
-  const { organizations, isLoading: isLoadingOrgs } = useOrganizations();
+  const { organizations, isLoading: isLoadingOrgs, organization } = useOrganizations();
   useSyncOnboardingState();
 
   // Determine if we should show onboarding
@@ -95,6 +95,13 @@ export default function Dashboard() {
     }, 500);
   };
 
+  // Check if business is verified
+  const isBusinessVerified = !!(
+    organization &&
+    organization.last_verified_at !== null &&
+    organization.verification_status === 'verified'
+  );
+
   return (
     <ProtectedLayout title="Dashboard · CargoBill">
       <div className="space-y-5">
@@ -133,63 +140,7 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {/* Business Wallet Card */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-0">
-              <div className="flex items-between justify-between">
-                <h2 className="text-md font-medium">Business Wallet</h2>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="link"
-                    className="text-xs p-0 h-auto"
-                    onClick={() => {
-                      toast.error(`Please complete business verification`, {
-                        duration: 3000,
-                        position: 'top-center',
-                        icon: '🔒',
-                      });
-                    }}
-                  >
-                    Deposit +
-                  </Button>
-                  <Button
-                    variant="link"
-                    className="text-xs p-0 h-auto"
-                    onClick={() => {
-                      toast.error(`Please complete business verification`, {
-                        duration: 3000,
-                        position: 'top-center',
-                        icon: '🔒',
-                      });
-                    }}
-                  >
-                    Withdraw -
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-2">
-                <div className="text-xs text-gray-500">Total Balance</div>
-                <div className="text-lg font-semibold">$0.00 USD</div>
-              </div>
-              <div className="aspect-[16/6] w-full mb-0">
-                {/* Placeholder for chart */}
-                <div className="aspect-[12/3] bg-gray-100 border-gray-200 border-[1px] rounded-md mb-2"></div>
-
-                <div className="flex justify-between space-x-2 p-1 bg-white border-gray-200 border-[1px] rounded-md">
-                  <Badge className="w-[100%] justify-center text-[10px] bg-slate-900 text-white hover:bg-slate-800 py-1 rounded-sm hover:cursor-pointer">
-                    0.00 USDC
-                  </Badge>
-                  <Badge className="w-[100%] justify-center text-[10px] bg-slate-900 text-white hover:bg-slate-800 py-1 rounded-sm hover:cursor-pointer">
-                    0.00 USDT
-                  </Badge>
-                  <Badge className="w-[100%] justify-center text-[10px] bg-slate-900 text-white hover:bg-slate-800 py-1 rounded-sm hover:cursor-pointer">
-                    0.00 EURC
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <BusinessWalletCard />
 
           {/* Volume Card */}
           <Card className="shadow-sm">
@@ -253,110 +204,6 @@ export default function Dashboard() {
             </Button> */}
           </div>
 
-          {/* <Card className="p-0 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-gray-50">
-                  <TableRow>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      Date
-                    </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      Category
-                    </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      To/From
-                    </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      Notes
-                    </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      Payment Method
-                    </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      Status
-                    </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      Amount
-                    </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="divide-y divide-gray-200">
-                  <TableRow>
-                    <TableCell className="py-3 px-3 text-xs text-gray-500">-</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">Freight Forwarding</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">
-                      Gandhi International Inc. - Chicago
-                    </TableCell>
-                    <TableCell className="py-3 px-3 text-xs text-gray-500">None</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">Business Wallet (...3sw6)</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">
-                      <Badge
-                        variant="outline"
-                        className="bg-gray-200 text-gray-800 hover:bg-gray-200"
-                      >
-                        Draft
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-3 px-3 text-xs">USDC 2234.00</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="link"
-                          className="text-blue-600 hover:text-blue-800 p-0 h-auto"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="link"
-                          className="text-red-600 hover:text-red-800 p-0 h-auto"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="py-3 px-3 text-xs text-gray-500">Due 1/1/25</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">Airline</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">
-                      Malaysian Airways LLC. - Kuala
-                    </TableCell>
-                    <TableCell className="py-3 px-3 text-xs text-gray-500">None</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">Credit Card (Chase 9876)</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">
-                      <Badge
-                        variant="outline"
-                        className="bg-blue-100 text-blue-800 hover:bg-blue-100"
-                      >
-                        Open
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-3 px-3 text-xs">USDC 100.00</TableCell>
-                    <TableCell className="py-3 px-3 text-xs">
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="link"
-                          className="text-blue-600 hover:text-blue-800 p-0 h-auto"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="link"
-                          className="text-red-600 hover:text-red-800 p-0 h-auto"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          </Card> */}
           <Card>
             <CardContent>
               <div className="text-center py-16">

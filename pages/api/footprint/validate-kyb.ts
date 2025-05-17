@@ -70,9 +70,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       .from('organizations')
       .update({
         verification_status: verificationStatus,
-        last_verified_at: new Date().toISOString(),
+        last_verified_at: verificationStatus === 'verified' ? new Date().toISOString() : null,
         requires_manual_review: requiresManualReview,
-        footprint_business_id: footprintBusinessId,
+        data_vault_id: footprintBusinessId,
         owner_footprint_id: ownerFootprintId,
         verification_provider: 'footprint',
       })
