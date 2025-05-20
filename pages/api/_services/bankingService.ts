@@ -3,10 +3,8 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
 // Banking API configuration
-const BANKING_API_KEY =
-  process.env.BANKING_API_KEY || '91855428ab9f4308ffdbb5627c9f52bf75f4377ee0b100d73fbfff33d1564cba'; // Default to QA key
-const BANKING_API_URL =
-  process.env.BANKING_API_URL || 'https://slipstreamdev.datavysta.com/api/rest';
+const BANKING_API_KEY = process.env.BANKING_API_KEY;
+const BANKING_API_URL = process.env.BANKING_API_URL;
 
 // Types for Banking API
 export interface BankingTransaction {

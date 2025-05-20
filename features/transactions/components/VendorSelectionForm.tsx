@@ -1,8 +1,7 @@
-// features/transactions/components/VendorSelectionForm.tsx (continued)
+// features/transactions/components/VendorSelectionForm.tsx
 import { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { z } from 'zod';
+import { useForm, useFieldArray, SubmitHandler, DefaultValues } from 'react-hook-form';
 import {
   Form,
   FormField,
@@ -25,8 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, CaretSortIcon, PlusIcon, TrashIcon } from 'lucide-react';
-import { VendorListItem } from '@/types/vendor';
+import { FiChevronDown, FiPlus, FiTrash2, FiCheck } from 'react-icons/fi';
 import {
   Select,
   SelectContent,
@@ -34,53 +32,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TOKENS } from '@/constants/solana';
+import { STABLECOINS, TOKENS } from '@/constants/solana';
 import { TokenType } from '@/types/token';
-
-// Create schema for the vendor form
-const createVendorFormSchema = (customFields: any[] = []) => {
-  let baseSchema = z.object({
-    vendor: z.string().min(1, 'Vendor is required'),
-    invoices: z
-      .array(
-        z.object({
-          number: z.string().min(1, 'Invoice number is required'),
-          amount: z.number().positive('Amount must be positive'),
-        }),
-      )
-      .min(1, 'At least one invoice is required'),
-    tokenType: z.enum(['USDC', 'USDT', 'SOL']).default('USDC'),
-    additionalInfo: z.string().optional(),
-    relatedBolAwb: z.string().optional(),
-  });
-
-  // Add custom fields to schema if provided
-  if (customFields && customFields.length > 0) {
-    const customFieldsSchema: Record<string, z.ZodTypeAny> = {};
-
-    customFields.forEach((field) => {
-      if (field.type === 'number') {
-        customFieldsSchema[field.key] = field.required
-          ? z.number({ required_error: `${field.name} is required` })
-          : z.number().optional();
-      } else {
-        customFieldsSchema[field.key] = field.required
-          ? z.string().min(1, `${field.name} is required`)
-          : z.string().optional();
-      }
-    });
-
-    baseSchema = baseSchema.extend(customFieldsSchema);
-  }
-
-  return baseSchema;
-};
-
-export type VendorFormValues = z.infer<ReturnType<typeof createVendorFormSchema>>;
+import {
+  createVendorFormSchema,
+  VendorFormValues,
+  EnrichedVendorFormValues,
+} from '@/schemas/vendor.schema';
+import { VendorDetails, VendorListItem } from '@/schemas/organization.schema';
 
 interface VendorSelectionFormProps {
   walletAddress: string;
-  onNext: (data: VendorFormValues) => void;
+  onNext: (data: EnrichedVendorFormValues) => void;
   availableVendors: VendorListItem[];
   isVendorsLoading: boolean;
   vendorsError: Error | null;
@@ -98,9 +61,11 @@ export function VendorSelectionForm({
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
-  const [vendorDetails, setVendorDetails] = useState<any | null>(null);
+  const [vendorDetails, setVendorDetails] = useState<VendorDetails | null>(null);
   const [isVendorLoading, setIsVendorLoading] = useState(false);
+  const [formSchema, setFormSchema] = useState(() => createVendorFormSchema());
 
+  // Filter vendors based on search query
   const filteredVendors = availableVendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(query.toLowerCase()),
   );
@@ -112,12 +77,23 @@ export function VendorSelectionForm({
 
       setIsVendorLoading(true);
       try {
-        // You can replace this with your actual vendor details API call
         const response = await fetch(`/api/vendors/${selectedVendor}`);
         if (!response.ok) throw new Error('Failed to fetch vendor details');
 
-        const data = await response.json();
-        setVendorDetails(data);
+        const result = await response.json();
+
+        // Extract the data property from the response
+        if (!result.success || !result.data) {
+          throw new Error(result.error?.message || 'Failed to fetch vendor details');
+        }
+
+        // Set only the data property as vendorDetails
+        setVendorDetails(result.data);
+
+        // Update the form schema with custom fields
+        if (result.data.business_details?.customFields) {
+          setFormSchema(createVendorFormSchema(result.data.business_details.customFields));
+        }
       } catch (error) {
         console.error('Error fetching vendor details:', error);
       } finally {
@@ -128,16 +104,19 @@ export function VendorSelectionForm({
     fetchVendorDetails();
   }, [selectedVendor]);
 
+  // Create default values matching the schema
+  const defaultValues: DefaultValues<VendorFormValues> = {
+    vendor: '',
+    invoices: [{ number: '', amount: 0 }],
+    tokenType: 'USDC',
+    additionalInfo: '',
+    relatedBolAwb: '',
+  };
+
   // Initialize form with schema
   const form = useForm<VendorFormValues>({
-    resolver: zodResolver(createVendorFormSchema(vendorDetails?.business_details?.customFields)),
-    defaultValues: {
-      vendor: '',
-      invoices: [{ number: '', amount: 0 }],
-      tokenType: 'USDC',
-      additionalInfo: '',
-      relatedBolAwb: '',
-    },
+    resolver: zodResolver(formSchema) as any, // Type assertion to fix resolver type issue
+    defaultValues,
   });
 
   // Setup field array for invoices
@@ -149,34 +128,46 @@ export function VendorSelectionForm({
   // Calculate total amount from all invoices
   const totalAmount = form
     .watch('invoices')
-    .reduce((sum, invoice) => sum + (invoice.amount || 0), 0);
+    .reduce((sum: number, invoice: any) => sum + (invoice.amount || 0), 0);
 
   // Reset form when vendor changes
   useEffect(() => {
     if (vendorDetails) {
-      // Reset custom fields if needed
-      const formValues = { ...form.getValues() };
+      // Get current values
+      const currentValues = form.getValues();
+      const newValues = { ...currentValues, vendor: selectedVendor || '' };
 
+      // Handle custom fields if they exist
       if (vendorDetails.business_details?.customFields) {
-        vendorDetails.business_details.customFields.forEach((field: any) => {
-          formValues[field.key] = field.defaultValue || '';
-        });
+        vendorDetails.business_details.customFields.forEach(
+          (field: {
+            key: string;
+            name: string;
+            type: string;
+            required: boolean;
+            defaultValue?: any;
+          }) => {
+            // Use type assertion to tell TypeScript this is a valid key
+            (newValues as any)[field.key] = field.defaultValue || '';
+          },
+        );
       }
 
-      form.reset({
-        ...formValues,
-        vendor: selectedVendor || '',
-      });
+      // Reset form with new values
+      form.reset(newValues);
     }
   }, [vendorDetails, form, selectedVendor]);
 
-  const onSubmit = (data: VendorFormValues) => {
-    const enrichedData = {
+  // Handle form submission
+  const handleSubmit: SubmitHandler<VendorFormValues> = (data) => {
+    // Enrich the data with additional context
+    const enrichedData: EnrichedVendorFormValues = {
       ...data,
       totalAmount,
       sender: walletAddress,
       receiverDetails: vendorDetails,
     };
+
     onNext(enrichedData);
   };
 
@@ -208,10 +199,14 @@ export function VendorSelectionForm({
     <Form {...form}>
       <div className="flex flex-col h-full">
         <div className="flex-1 overflow-y-auto pb-24">
-          <form id="vendor-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form
+            id="vendor-form"
+            onSubmit={form.handleSubmit(handleSubmit as any)}
+            className="space-y-6"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
-                control={form.control}
+                control={form.control as any} // Type assertion to fix control type issue
                 name="vendor"
                 render={({ field }) => (
                   <FormItem className="md:flex md:flex-col md:justify-end">
@@ -222,16 +217,14 @@ export function VendorSelectionForm({
                           <Button
                             variant="outline"
                             role="combobox"
-                            className={`w-full justify-between ${
+                            className={`w-full justify-between bg-white hover:bg-white/60 ${
                               !field.value && 'text-muted-foreground'
                             }`}
                           >
                             {field.value
-                              ? availableVendors.find(
-                                  (vendor: VendorListItem) => vendor.id === field.value,
-                                )?.name
+                              ? availableVendors.find((vendor) => vendor.id === field.value)?.name
                               : 'Select vendor'}
-                            <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            <FiChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
@@ -249,7 +242,7 @@ export function VendorSelectionForm({
                           <CommandList>
                             <CommandEmpty>No vendors found.</CommandEmpty>
                             <CommandGroup>
-                              {filteredVendors.map((vendor: VendorListItem) => (
+                              {filteredVendors.map((vendor) => (
                                 <CommandItem
                                   key={vendor.id}
                                   value={vendor.id}
@@ -261,7 +254,7 @@ export function VendorSelectionForm({
                                   }}
                                 >
                                   {vendor.name}
-                                  <Check
+                                  <FiCheck
                                     className={`ml-auto h-4 w-4 ${
                                       vendor.id === field.value ? 'opacity-100' : 'opacity-0'
                                     }`}
@@ -278,28 +271,26 @@ export function VendorSelectionForm({
                 )}
               />
 
-              <Card className="bg-muted/50">
-                <CardContent className="p-4">
+              <Card className="bg-white">
+                <CardContent className="px-4 my-0 py-0">
                   {!selectedVendor ? (
                     <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
                       Please select a vendor to view details
                     </div>
                   ) : isVendorLoading ? (
                     <div className="space-y-1 p-0 m-0">
-                      <Skeleton className="h-[14px] w-[250px]" />
-                      <Skeleton className="h-[12px] w-[200px]" />
-                      <Skeleton className="h-[12px] w-[150px]" />
+                      <Skeleton className="h-[16px] w-[250px] bg-gray-400" />
+                      <Skeleton className="h-[14px] w-[200px] bg-gray-400" />
+                      <Skeleton className="h-[14px] w-[150px] bg-gray-400" />
                     </div>
                   ) : vendorDetails ? (
-                    <div className="p-0 m-0">
-                      <h4 className="font-semibold text-sm">
-                        {vendorDetails.business_details?.companyName}
-                      </h4>
+                    <div className="p-0 m-0 gap-[2px]">
+                      <h4 className="font-semibold text-sm">{vendorDetails.name || 'NA'}</h4>
                       <p className="text-xs text-muted-foreground">
-                        {vendorDetails.business_details?.companyAddress}
+                        Address: {vendorDetails.primary_address || 'NA'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {vendorDetails.business_details?.companyPhone}
+                        Phone #:{vendorDetails.business_details.phone || 'NA'}
                       </p>
                     </div>
                   ) : null}
@@ -314,17 +305,17 @@ export function VendorSelectionForm({
                   name="tokenType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Currency</FormLabel>
+                      <FormLabel>Payment Currency</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className={'bg-white hover:bg-white/60'}>
                             <SelectValue placeholder="Select currency" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {Object.entries(TOKENS).map(([key, token]) => (
+                          {Object.entries(STABLECOINS).map(([key]) => (
                             <SelectItem key={key} value={key}>
-                              {token.name} ({key})
+                              {key}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -351,7 +342,7 @@ export function VendorSelectionForm({
                     <div key={field.id} className="space-y-2">
                       <div className="flex gap-6 w-full">
                         <FormField
-                          control={form.control}
+                          control={form.control as any} // Type assertion to fix control type issue
                           name={`invoices.${index}.number`}
                           render={({ field }) => (
                             <FormItem className="w-[50%]">
@@ -363,7 +354,7 @@ export function VendorSelectionForm({
                           )}
                         />
                         <FormField
-                          control={form.control}
+                          control={form.control as any} // Type assertion to fix control type issue
                           name={`invoices.${index}.amount`}
                           render={({ field }) => (
                             <FormItem className="w-[50%]">
@@ -371,8 +362,8 @@ export function VendorSelectionForm({
                                 <Input
                                   type="number"
                                   placeholder="0.00"
-                                  {...field}
-                                  onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                  value={field.value || ''}
+                                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -386,7 +377,7 @@ export function VendorSelectionForm({
                           onClick={() => remove(index)}
                           className="w-10 flex-shrink-0 hover:opacity-70 transition-opacity"
                         >
-                          <TrashIcon
+                          <FiTrash2
                             className={`h-5 w-5 ${index === 0 ? 'text-gray-300' : 'text-black'}`}
                           />
                         </button>
@@ -397,7 +388,7 @@ export function VendorSelectionForm({
                           onClick={() => append({ number: '', amount: 0 })}
                           className="w-full text-center pt-2 text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-center gap-2"
                         >
-                          <PlusIcon className="h-4 w-4" />
+                          <FiPlus className="h-4 w-4" />
                           Add Another Invoice
                         </button>
                       )}
@@ -406,35 +397,48 @@ export function VendorSelectionForm({
                 </div>
 
                 {/* Custom fields from vendor */}
-                {vendorDetails.business_details?.customFields?.map((field: any) => (
-                  <FormField
-                    key={field.key}
-                    control={form.control}
-                    name={field.key as any}
-                    render={({ field: formField }) => (
-                      <FormItem>
-                        <FormLabel>{field.name}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type={field.type === 'number' ? 'number' : 'text'}
-                            placeholder={`Enter ${field.name.toLowerCase()}`}
-                            required={field.required}
-                            {...formField}
-                            onChange={
-                              field.type === 'number'
-                                ? (e) => formField.onChange(parseFloat(e.target.value))
-                                : formField.onChange
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                ))}
+                {vendorDetails.business_details?.customFields?.map(
+                  (field: {
+                    key: string;
+                    name: string;
+                    type: string;
+                    required: boolean;
+                    defaultValue?: any;
+                  }) => {
+                    // We need to cast this to 'any' since the field keys are dynamic
+                    const fieldName = field.key as any;
+
+                    return (
+                      <FormField
+                        key={field.key}
+                        control={form.control as any} // Type assertion to fix control type issue
+                        name={fieldName}
+                        render={({ field: formField }) => (
+                          <FormItem>
+                            <FormLabel>{field.name}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type={field.type === 'number' ? 'number' : 'text'}
+                                placeholder={`Enter ${field.name.toLowerCase()}`}
+                                required={field.required}
+                                value={formField.value || ''}
+                                onChange={
+                                  field.type === 'number'
+                                    ? (e) => formField.onChange(parseFloat(e.target.value) || 0)
+                                    : formField.onChange
+                                }
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    );
+                  },
+                )}
 
                 <FormField
-                  control={form.control}
+                  control={form.control as any} // Type assertion to fix control type issue
                   name="relatedBolAwb"
                   render={({ field }) => (
                     <FormItem>
@@ -448,7 +452,7 @@ export function VendorSelectionForm({
                 />
 
                 <FormField
-                  control={form.control}
+                  control={form.control as any} // Type assertion to fix control type issue
                   name="additionalInfo"
                   render={({ field }) => (
                     <FormItem>

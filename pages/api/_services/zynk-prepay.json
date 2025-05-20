@@ -1,0 +1,150 @@
+{
+  "info": {
+    "name": "Zynk Prepaid KYC Operations",
+    "description": "Additional endpoints for managing prepaid KYC balance and deposits",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{ZYNK_API_KEY}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://qaapi.zynklabs.xyz/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "ZYNK_API_KEY",
+      "value": "your-api-key-here",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Prepaid KYC Operations",
+      "description": "Endpoints for managing prepaid KYC balance and deposits",
+      "item": [
+        {
+          "name": "Get Prepaid KYC Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transformer/utility/prepaid/kyc/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["transformer", "utility", "prepaid", "kyc", "balance"]
+            },
+            "description": "Get current prepaid KYC balance and deposit instructions"
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transformer/utility/prepaid/kyc/balance",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["transformer", "utility", "prepaid", "kyc", "balance"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"depositInstructions\": {\n      \"network\": \"Solana Devnet (Chain ID: 103)\",\n      \"currency\": \"USDC\",\n      \"tokenAddress\": \"Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr\",\n      \"toWalletAddress\": \"DTsr4TDhuaTUAFo9ULgYt29myZbz6EpS55aGEFiLCwa3\"\n    },\n    \"balance\": {\n      \"balance\": 500000,\n      \"mintAddress\": \"HVD2u7fRbeQem9dQ9Afs25FxidtjLiKdJTcr5GnahSAQ\",\n      \"message\": \"Balance retrieved successfully\"\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Submit Prepaid KYC Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionHash\": \"57hFL4uicM7mEu8wfrFxVJeJaASwT3ksuWxbPt2FvRgYpMc29szZ1kqQGwrRGEfFQwwaYBrvtPEdAwttnKCgN1GD\",\n  \"base64Signature\": \"kXdG5L6mDW3r5pNHz2jBTw56lGJQ4zfP+JKqdjJ7TF5EVrl/Qx13cVPY0xM6R3B+2V8zLm6dNwrtjXeD84gEBQ==\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transformer/utility/prepaid/kyc/deposit",
+              "host": ["{{baseUrl}}"],
+              "path": ["transformer", "utility", "prepaid", "kyc", "deposit"]
+            },
+            "description": "Submit a prepaid KYC deposit notification"
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"transactionHash\": \"57hFL4uicM7mEu8wfrFxVJeJaASwT3ksuWxbPt2FvRgYpMc29szZ1kqQGwrRGEfFQwwaYBrvtPEdAwttnKCgN1GD\",\n  \"base64Signature\": \"kXdG5L6mDW3r5pNHz2jBTw56lGJQ4zfP+JKqdjJ7TF5EVrl/Qx13cVPY0xM6R3B+2V8zLm6dNwrtjXeD84gEBQ==\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transformer/utility/prepaid/kyc/deposit",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["transformer", "utility", "prepaid", "kyc", "deposit"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"mintTransactionHash\": \"63pfQWda9vy1sbQ8XKhUbgKuC4KUz7K9oVWXqnzp5XHyNfz2gmkmTeSrx1mNJSQsiGtTRYPDFeNGkNydjv7u114V\",\n    \"mintAddress\": \"HVD2u7fRbeQem9dQ9Afs25FxidtjLiKdJTcr5GnahSAQ\",\n    \"message\": \"Deposit successful\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

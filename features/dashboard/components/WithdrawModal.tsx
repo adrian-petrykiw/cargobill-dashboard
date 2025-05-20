@@ -32,12 +32,15 @@ interface WithdrawModalProps {
   tokenBalances: TokenBalance[];
 }
 
+// Define the allowed stablecoin types for withdrawals
+type StablecoinType = Exclude<TokenType, 'SOL'>;
+
 export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
   const { wallets, ready } = useSolanaWallets();
   const { organization } = useOrganizations();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<TokenType>('USDC');
+  const [selectedToken, setSelectedToken] = useState<StablecoinType>('USDC');
   const [amount, setAmount] = useState<string>('');
   const [step, setStep] = useState<'form' | 'confirmation' | 'processing'>('form');
   const [simulationData, setSimulationData] = useState<any>(null);
@@ -46,6 +49,11 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
   // Get the Privy-embedded wallet
   const embeddedWallet = wallets.find((wallet) => wallet.walletClientType === 'privy');
   const publicKey = embeddedWallet?.address ? new PublicKey(embeddedWallet.address) : null;
+
+  // Filter token balances to only include stablecoins
+  const stablecoinBalances = tokenBalances.filter(
+    (balance): balance is TokenBalance & { token: StablecoinType } => balance.token !== 'SOL',
+  );
 
   // Use React Query to fetch payment methods
   const {
@@ -66,20 +74,20 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
 
   const paymentMethods: PaymentMethod[] = paymentMethodsResponse?.bankAccounts || [];
 
-  // Update selected token based on available balances
+  // Update selected token based on available stablecoin balances
   useEffect(() => {
-    if (tokenBalances.length > 0) {
-      // Select token with highest balance by default
-      const highestBalanceToken = tokenBalances.reduce(
+    if (stablecoinBalances.length > 0) {
+      // Select stablecoin with highest balance by default
+      const highestBalanceToken = stablecoinBalances.reduce(
         (prev, current) => (current.balance > prev.balance ? current : prev),
-        tokenBalances[0],
+        stablecoinBalances[0],
       );
 
       if (highestBalanceToken && highestBalanceToken.balance > 0) {
         setSelectedToken(highestBalanceToken.token);
       }
     }
-  }, [tokenBalances]);
+  }, [stablecoinBalances]);
 
   // Set the first payment method as selected if available
   useEffect(() => {
@@ -109,7 +117,7 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
       return;
     }
 
-    const selectedBalance = tokenBalances.find((balance) => balance.token === selectedToken);
+    const selectedBalance = stablecoinBalances.find((balance) => balance.token === selectedToken);
     if (!selectedBalance) {
       toast.error(`Token information not available`);
       return;
@@ -128,7 +136,7 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
     setIsSubmitting(true);
     try {
       // Simulate the withdrawal via Zynk
-      const response = await axios.post('/api/offramp/simulate', {
+      const response = await axios.post('/api/ramp/offramp/simulate', {
         organizationId: organization.id,
         amount: amountValue,
         token: selectedToken,
@@ -160,7 +168,7 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
     setStep('processing');
 
     try {
-      const response = await axios.post('/api/offramp/execute', {
+      const response = await axios.post('/api/ramp/offramp/execute', {
         organizationId: organization.id,
         simulationId: simulationData.executionId,
       });
@@ -192,9 +200,9 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
     setSimulationData(null);
   };
 
-  // Get max amount for selected token
+  // Get max amount for selected stablecoin
   const getMaxAmount = () => {
-    const selectedBalance = tokenBalances.find((balance) => balance.token === selectedToken);
+    const selectedBalance = stablecoinBalances.find((balance) => balance.token === selectedToken);
     return selectedBalance ? selectedBalance.balance : 0;
   };
 
@@ -204,6 +212,12 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
     if (maxAmount > 0) {
       setAmount(maxAmount.toString());
     }
+  };
+
+  // Check if stablecoin can be withdrawn (has balance and ATA)
+  const canWithdrawToken = (tokenType: StablecoinType): boolean => {
+    const balance = stablecoinBalances.find((b) => b.token === tokenType);
+    return !!(balance && balance.balance > 0 && balance.ata);
   };
 
   // Check if business is verified
@@ -272,25 +286,30 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
         <DialogHeader>
           <DialogTitle>Withdraw Funds</DialogTitle>
           <DialogDescription>
-            Withdraw from your business wallet to your linked bank account.
+            Withdraw stablecoins from your business wallet to your linked bank account.
           </DialogDescription>
         </DialogHeader>
 
         {step === 'form' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Token</Label>
+              <Label>Stablecoin</Label>
               <Select
                 value={selectedToken}
-                onValueChange={(value: TokenType) => setSelectedToken(value)}
+                onValueChange={(value: StablecoinType) => setSelectedToken(value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a token" />
+                  <SelectValue placeholder="Select a stablecoin" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tokenBalances.map((item) => (
-                    <SelectItem key={item.token} value={item.token} disabled={!item.ata}>
+                  {stablecoinBalances.map((item) => (
+                    <SelectItem
+                      key={item.token}
+                      value={item.token}
+                      disabled={!canWithdrawToken(item.token)}
+                    >
                       {item.token} - Balance: {item.balance.toFixed(2)}
+                      {!canWithdrawToken(item.token) && ' (Not available)'}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -348,7 +367,8 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
 
             <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
               <p>
-                This will withdraw funds from your business wallet to your linked payment method.
+                This will withdraw {selectedToken} from your business wallet to your linked payment
+                method.
               </p>
             </div>
 
@@ -362,7 +382,9 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
                 parseFloat(amount) <= 0 ||
                 (parseFloat(amount) > getMaxAmount() && getMaxAmount() > 0) ||
                 paymentMethods.length === 0 ||
-                !selectedPaymentMethod
+                !selectedPaymentMethod ||
+                !canWithdrawToken(selectedToken) ||
+                stablecoinBalances.length === 0
               }
             >
               {isSubmitting ? (
@@ -374,6 +396,12 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
                 'Continue'
               )}
             </Button>
+
+            {stablecoinBalances.length === 0 && (
+              <div className="text-center text-sm text-gray-500">
+                No stablecoins available for withdrawal. Deposit funds first.
+              </div>
+            )}
           </div>
         )}
 

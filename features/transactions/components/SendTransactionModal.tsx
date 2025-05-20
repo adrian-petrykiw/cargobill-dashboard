@@ -8,8 +8,9 @@ import { Progress } from '@/components/ui/progress';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOrganizations } from '@/hooks/useOrganizations';
 import { VendorSelectionForm } from './VendorSelectionForm';
-import { PaymentDetailsForm } from './PaymentDetailsForm';
 import { TransactionConfirmation } from './TransactionConfirmation';
+import { EnrichedVendorFormValues, PaymentDetailsFormValues } from '@/schemas/vendor.schema';
+import { PaymentDetailsForm } from './ PaymentDetailsForm';
 import { useVendorSelection } from '@/hooks/useVendorSelection';
 
 interface SendTransactionModalProps {
@@ -19,8 +20,8 @@ interface SendTransactionModalProps {
 
 export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalProps) {
   const [step, setStep] = useState(0);
-  const [vendorFormData, setVendorFormData] = useState<any>(null);
-  const [paymentFormData, setPaymentFormData] = useState<any>(null);
+  const [vendorFormData, setVendorFormData] = useState<EnrichedVendorFormValues | null>(null);
+  const [paymentFormData, setPaymentFormData] = useState<PaymentDetailsFormValues | null>(null);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { organization } = useOrganizations();
@@ -30,6 +31,7 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
   const embeddedWallet = wallets.find((wallet) => wallet.walletClientType === 'privy');
   const walletAddress = embeddedWallet?.address || '';
 
+  // Use the correct hook for vendors list
   const {
     data: vendors = [],
     isLoading: isVendorsLoading,
@@ -64,13 +66,13 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
     handleClose();
   };
 
-  const handleVendorSubmit = (data: any) => {
+  const handleVendorSubmit = (data: EnrichedVendorFormValues) => {
     console.log('Vendor Data:', data);
     setVendorFormData(data);
     setStep(1);
   };
 
-  const handlePaymentSubmit = (data: any) => {
+  const handlePaymentSubmit = (data: PaymentDetailsFormValues) => {
     console.log('Payment Data:', data);
     setPaymentFormData(data);
     setStep(2);
@@ -96,7 +98,7 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
     },
     {
       title: '2. Payment Details',
-      component: (
+      component: vendorFormData ? (
         <PaymentDetailsForm
           onNext={handlePaymentSubmit}
           onBack={handleBack}
@@ -104,20 +106,21 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
           walletAddress={walletAddress}
           organization={organization}
         />
-      ),
+      ) : null,
     },
     {
       title: '3. Confirmation',
-      component: (
-        <TransactionConfirmation
-          onClose={handleTransactionComplete}
-          onBack={handleBack}
-          vendorData={vendorFormData}
-          paymentData={paymentFormData}
-          wallet={embeddedWallet}
-          organization={organization}
-        />
-      ),
+      component:
+        vendorFormData && paymentFormData ? (
+          <TransactionConfirmation
+            onClose={handleTransactionComplete}
+            onBack={handleBack}
+            vendorData={vendorFormData}
+            paymentData={paymentFormData}
+            wallet={embeddedWallet}
+            organization={organization}
+          />
+        ) : null,
     },
   ];
 
@@ -136,7 +139,7 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
       }}
     >
       <DialogContent
-        className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col"
+        className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col "
         onPointerDownOutside={(e) => {
           e.preventDefault();
         }}
@@ -149,19 +152,19 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
             <DialogTitle className="text-xl">Send Payment</DialogTitle>
           </DialogHeader>
 
-          <div className="flex space-x-4 justify-between w-full mt-4">
+          <div className="flex space-x-4 justify-between w-full mt-4 ">
             {steps.map((stepItem, index) => (
               <div
                 key={index}
                 className={`step-indicator ${
-                  index === step ? 'text-quaternary' : 'text-gray-400'
-                } text-sm font-semibold text-start w-full`}
+                  index === step ? 'text-quaternary' : 'text-gray-300'
+                } text-sm font-medium text-start w-full`}
               >
                 {stepItem.title}
               </div>
             ))}
           </div>
-          <Progress value={progressPercentage} className="w-full mt-2" />
+          <Progress value={progressPercentage} className="w-full mt-2 bg-gray-300" />
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden">
