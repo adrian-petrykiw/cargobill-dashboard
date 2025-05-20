@@ -56,6 +56,33 @@ export class SolanaService {
     return this.initConnection();
   }
 
+  /**
+   * Get SOL balance for a given address in SOL units (not lamports)
+   */
+  async getSolBalance(
+    address: string | PublicKey,
+    commitment: Commitment = 'confirmed',
+  ): Promise<number> {
+    const publicKey = typeof address === 'string' ? new PublicKey(address) : address;
+
+    try {
+      console.log(`Getting SOL balance for address: ${publicKey.toBase58()}`);
+
+      // Get balance in lamports
+      const balanceInLamports = await this.connection.getBalance(publicKey, commitment);
+
+      // Convert lamports to SOL (1 SOL = 10^9 lamports)
+      const balanceInSol = balanceInLamports / Math.pow(10, 9);
+
+      console.log(`SOL balance: ${balanceInSol} SOL (${balanceInLamports} lamports)`);
+
+      return balanceInSol;
+    } catch (error) {
+      console.error('Error fetching SOL balance:', error);
+      throw error;
+    }
+  }
+
   async confirmTransactionWithRetry(
     signature: TransactionSignature,
     commitment: Commitment = 'confirmed',

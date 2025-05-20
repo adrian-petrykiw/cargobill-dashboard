@@ -5,11 +5,34 @@ import { jsonSchema } from './common';
 // Define ISO country code validation for consistency
 const iso3CountryCode = z.string().length(3, 'Country code must be 3 characters');
 
+// Define business details schema with specific vendor-related fields
+export const businessDetailsSchema = z
+  .object({
+    companyName: z.string().optional(),
+    companyAddress: z.string().optional(),
+    companyPhone: z.string().optional(),
+    companyEmail: z.string().optional(),
+    email: z.string().optional(),
+    customFields: z
+      .array(
+        z.object({
+          key: z.string(),
+          name: z.string(),
+          type: z.string(),
+          required: z.boolean(),
+          defaultValue: z.any().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .catchall(z.any())
+  .optional();
+
 export const organizationSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100),
   country: iso3CountryCode,
-  business_details: jsonSchema,
+  business_details: jsonSchema, // Keep this as jsonSchema for flexibility
   entity_type: z.string(),
   account_status: z.string().nullable().optional(),
   created_at: z.string().nullable().optional(),
@@ -36,6 +59,23 @@ export const organizationSchema = z.object({
 });
 
 export type Organization = z.infer<typeof organizationSchema>;
+
+// Extend organization schema for vendors - keep the original structure but add multisigAddress
+export const vendorSchema = organizationSchema.extend({
+  multisigAddress: z.string().optional(),
+  // We don't override business_details here since it accepts any JSON already
+});
+
+// Simple vendor list item schema
+export const vendorListItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  email: z.string().email().optional(),
+  status: z.string().optional(),
+});
+
+export type VendorDetails = z.infer<typeof vendorSchema>;
+export type VendorListItem = z.infer<typeof vendorListItemSchema>;
 
 export const createOrganizationSchema = organizationSchema
   .omit({

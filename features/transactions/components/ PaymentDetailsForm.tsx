@@ -1,8 +1,6 @@
 // features/transactions/components/PaymentDetailsForm.tsx
-import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import {
   Form,
   FormField,
@@ -25,68 +23,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PublicKey } from '@solana/web3.js';
 import { useTokenBalance } from '@/hooks/useTokenBalances';
 import { Organization } from '@/schemas/organization.schema';
-
-// Define schema for payment details form
-const paymentDetailsSchema = z
-  .object({
-    paymentMethod: z.enum(['account_credit', 'ach', 'wire', 'credit_card', 'debit_card']),
-    // Optional fields for ACH
-    accountName: z.string().optional(),
-    routingNumber: z.string().optional(),
-    accountNumber: z.string().optional(),
-    accountType: z.enum(['checking', 'savings']).optional(),
-    // Optional fields for wire
-    bankName: z.string().optional(),
-    swiftCode: z.string().optional(),
-    // Optional fields for credit/debit card
-    cardNumber: z.string().optional(),
-    expiryDate: z.string().optional(),
-    cvv: z.string().optional(),
-    billingName: z.string().optional(),
-    billingAddress: z.string().optional(),
-    billingCity: z.string().optional(),
-    billingState: z.string().optional(),
-    billingZip: z.string().optional(),
-  })
-  .refine(
-    (data) => {
-      // Validate ACH fields
-      if (data.paymentMethod === 'ach') {
-        return (
-          !!data.accountName && !!data.routingNumber && !!data.accountNumber && !!data.accountType
-        );
-      }
-      // Validate wire fields
-      if (data.paymentMethod === 'wire') {
-        return !!data.bankName && !!data.accountNumber && !!data.routingNumber;
-      }
-      // Validate card fields
-      if (data.paymentMethod === 'credit_card' || data.paymentMethod === 'debit_card') {
-        return (
-          !!data.cardNumber &&
-          !!data.expiryDate &&
-          !!data.cvv &&
-          !!data.billingName &&
-          !!data.billingAddress &&
-          !!data.billingCity &&
-          !!data.billingState &&
-          !!data.billingZip
-        );
-      }
-      return true;
-    },
-    {
-      message: 'Please fill all required fields for the selected payment method',
-      path: ['paymentMethod'],
-    },
-  );
-
-export type PaymentDetailsFormValues = z.infer<typeof paymentDetailsSchema>;
+import { useEffect, useState } from 'react';
+import { paymentDetailsSchema, PaymentDetailsFormValues } from '@/schemas/vendor.schema';
+import { EnrichedVendorFormValues } from '@/schemas/vendor.schema';
 
 interface PaymentDetailsFormProps {
   onNext: (data: PaymentDetailsFormValues) => void;
   onBack: () => void;
-  vendorFormData: any;
+  vendorFormData: EnrichedVendorFormValues;
   walletAddress: string;
   organization: Organization | null;
 }
@@ -126,16 +70,15 @@ export function PaymentDetailsForm({
     resolver: zodResolver(paymentDetailsSchema),
     defaultValues: {
       paymentMethod: 'account_credit',
+      tokenType, // Initialize with the token type from previous step
     },
   });
 
   const selectedMethod = form.watch('paymentMethod');
 
   const onSubmit = (data: PaymentDetailsFormValues) => {
-    onNext({
-      ...data,
-      tokenType, // Include token type from previous step
-    });
+    // Include the token type
+    onNext(data);
   };
 
   const formatBalance = (balance: number | null | undefined) => {

@@ -20,7 +20,7 @@ import { OrganizationSetupModal } from '@/components/onboarding/OnboardingSetupM
 import { toast } from 'react-hot-toast';
 import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState';
 import { BusinessWalletCard } from '@/features/dashboard/components/BusinessWalletCard';
-import { SendTransactionModal } from '@/features/transactions/components/SendTransactionsModal';
+import { SendTransactionModal } from '@/features/transactions/components/SendTransactionModal';
 
 export default function Dashboard() {
   const user = useUserStore((state) => state.user);
@@ -182,7 +182,7 @@ export default function Dashboard() {
           <Card className="shadow-sm">
             <CardHeader className="pb-0">
               <div className="flex items-between justify-between">
-                <h2 className="text-md font-medium">Treasury (...r32Y)</h2>
+                <h2 className="text-md font-medium">Treasury</h2>
                 <Button variant="link" className="text-xs p-0 h-auto">
                   Manage →
                 </Button>

@@ -1,4 +1,4 @@
-// pages/api/onramp/simulate.ts
+// pages/api/ramp/onramp/simulate.ts
 import type { NextApiResponse } from 'next';
 import { withAuthMiddleware } from '../../_middleware/withAuth';
 import { AuthenticatedRequest } from '@/types/api/requests';

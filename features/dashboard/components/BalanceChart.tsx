@@ -1,5 +1,5 @@
 // components/features/dashboard/components/BalanceChart.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -12,9 +12,27 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TokenBalance, TokenType } from '@/types/token';
+import { STABLECOINS } from '@/constants/solana';
+
+// Type for stablecoin tokens only (excluding SOL)
+type StablecoinType = Exclude<TokenType, 'SOL'>;
+
+// Format large numbers to K, M, B format
+const formatYAxisValue = (value: number): string => {
+  if (value >= 1000000000) {
+    return `${(value / 1000000000).toFixed(1)}B`;
+  }
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}M`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}K`;
+  }
+  return `${value}`;
+};
 
 // Mock data for the chart - this would be replaced with real data
-const generateMockData = (balances: TokenBalance[], visibleTokens: TokenType[]) => {
+const generateMockData = (balances: TokenBalance[], visibleTokens: StablecoinType[]) => {
   // Generate 12 months of mock data
   return Array.from({ length: 12 }, (_, i) => {
     const month = new Date(2025, i, 1).toLocaleString('default', { month: 'short' });
@@ -41,9 +59,20 @@ interface BalanceChartProps {
 }
 
 export const BalanceChart: React.FC<BalanceChartProps> = ({ balances, isLoading }) => {
-  const [visibleTokens, setVisibleTokens] = useState<TokenType[]>(['USDC', 'USDT', 'EURC']);
+  // Filter out SOL and only keep stablecoins
+  const stablecoinBalances = useMemo(
+    () => balances.filter((balance) => Object.keys(STABLECOINS).includes(balance.token)),
+    [balances],
+  );
 
-  const toggleToken = (token: TokenType) => {
+  // Initialize with all available stablecoins (excluding SOL)
+  const [visibleTokens, setVisibleTokens] = useState<StablecoinType[]>([
+    'USDC',
+    'USDT',
+    'EURC',
+  ] as StablecoinType[]);
+
+  const toggleToken = (token: StablecoinType) => {
     setVisibleTokens((prev) => {
       if (prev.includes(token)) {
         // Don't allow removing the last token
@@ -54,18 +83,18 @@ export const BalanceChart: React.FC<BalanceChartProps> = ({ balances, isLoading 
     });
   };
 
-  const chartData = generateMockData(balances, visibleTokens);
+  const chartData = generateMockData(stablecoinBalances, visibleTokens);
 
   // Colors for tokens
-  const tokenColors = {
+  const tokenColors: Record<StablecoinType, string> = {
     USDC: '#2775CA', // USDC blue
     USDT: '#26A17B', // USDT green
     EURC: '#052D56', // EURC navy blue
   };
 
-  // Get the total balance
-  const totalBalance = balances
-    .filter((balance) => visibleTokens.includes(balance.token))
+  // Get the total balance (stablecoins only)
+  const totalBalance = stablecoinBalances
+    .filter((balance) => visibleTokens.includes(balance.token as StablecoinType))
     .reduce((sum, item) => sum + item.balance, 0);
 
   return (
@@ -79,54 +108,90 @@ export const BalanceChart: React.FC<BalanceChartProps> = ({ balances, isLoading 
         )}
       </div>
 
-      <div className="aspect-[16/6] w-full mb-0">
-        {isLoading ? (
-          <div className="aspect-[12/3] bg-gray-100 border-gray-200 border-[1px] rounded-md mb-2">
-            <Skeleton className="h-full w-full" />
-          </div>
-        ) : (
-          <div className="aspect-[12/3] border-gray-200 border-[1px] rounded-md mb-2 p-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip />
-                {visibleTokens.map((token) => (
-                  <Area
-                    key={token}
-                    type="monotone"
-                    dataKey={token}
-                    stackId="1"
-                    stroke={tokenColors[token]}
-                    fill={tokenColors[token]}
-                    fillOpacity={0.6}
-                  />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        <div className="flex justify-between space-x-2 p-1 bg-white border-gray-200 border-[1px] rounded-md">
-          {balances.map((tokenBalance) => (
-            <Badge
-              key={tokenBalance.token}
-              className={`w-[100%] justify-center text-[10px] py-1 rounded-sm hover:cursor-pointer ${
-                visibleTokens.includes(tokenBalance.token)
-                  ? 'bg-slate-900 text-white hover:bg-slate-800'
-                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-              }`}
-              onClick={() => toggleToken(tokenBalance.token)}
-            >
-              {isLoading ? (
-                <Skeleton className="h-3 w-12" />
-              ) : (
-                `${tokenBalance.balance.toFixed(2)} ${tokenBalance.token}`
-              )}
-            </Badge>
-          ))}
+      {/* Chart container - Reduced height to match cashflow card */}
+      {isLoading ? (
+        <div className="h-[140px] bg-gray-100 rounded-md">
+          <Skeleton className="h-full w-full" />
         </div>
+      ) : (
+        <div className="h-[140px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                {visibleTokens.map((token) => (
+                  <linearGradient
+                    key={`gradient-${token}`}
+                    id={`color${token}`}
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="5%" stopColor={tokenColors[token]} stopOpacity={0.8} />
+                    <stop offset="95%" stopColor={tokenColors[token]} stopOpacity={0.2} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 8 }}
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+                tickMargin={2}
+                minTickGap={2}
+              />
+              <YAxis
+                tick={{ fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={formatYAxisValue}
+                width={28}
+                tickMargin={0}
+                allowDecimals={false}
+              />
+              <Tooltip
+                formatter={(value) => [`$${Number(value).toFixed(2)}`, '']}
+                labelFormatter={(label) => `${label} 2025`}
+              />
+              {visibleTokens.map((token) => (
+                <Area
+                  key={token}
+                  type="monotone"
+                  dataKey={token}
+                  stackId="1"
+                  stroke={tokenColors[token]}
+                  fill={`url(#color${token})`}
+                  fillOpacity={0.8}
+                />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Token badges - only show stablecoins */}
+      <div className="flex justify-between space-x-2 mt-2">
+        {stablecoinBalances.map((tokenBalance) => (
+          <Badge
+            key={tokenBalance.token}
+            className={`w-full py-2 rounded-sm hover:cursor-pointer flex justify-center items-center ${
+              visibleTokens.includes(tokenBalance.token as StablecoinType)
+                ? 'bg-slate-900 text-white hover:bg-slate-800'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            onClick={() => toggleToken(tokenBalance.token as StablecoinType)}
+          >
+            {isLoading ? (
+              <Skeleton className="h-4 w-16" />
+            ) : (
+              <span className="font-medium text-xs">
+                {tokenBalance.balance.toFixed(2)} {tokenBalance.token}
+              </span>
+            )}
+          </Badge>
+        ))}
       </div>
     </div>
   );

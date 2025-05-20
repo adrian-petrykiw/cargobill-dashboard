@@ -3,12 +3,6 @@ import { useState, useEffect } from 'react';
 import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { PublicKey } from '@solana/web3.js';
 import {
-  getAssociatedTokenAddress,
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-} from '@solana/spl-token';
-import * as multisig from '@sqds/multisig';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'react-hot-toast';
-import { solanaService } from '@/services/blockchain/solana';
+import { multisigService } from '@/services/blockchain/multisig';
 import Spinner from '@/components/common/Spinner';
 import {
   Select,
@@ -32,7 +26,6 @@ import {
 import { useOrganizations } from '@/hooks/useOrganizations';
 import axios from 'axios';
 import { TokenBalance, TokenType } from '@/types/token';
-import { TOKENS } from '@/constants/solana';
 import { useQuery } from '@tanstack/react-query';
 import { PaymentMethod } from '@/types/ramping';
 
@@ -40,12 +33,15 @@ interface DepositModalProps {
   tokenBalances: TokenBalance[];
 }
 
+// Define the allowed stablecoin types for deposits
+type StablecoinType = Exclude<TokenType, 'SOL'>;
+
 export function DepositModal({ tokenBalances }: DepositModalProps) {
   const { wallets, ready } = useSolanaWallets();
   const { organization } = useOrganizations();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<TokenType>('USDC');
+  const [selectedToken, setSelectedToken] = useState<StablecoinType>('USDC');
   const [amount, setAmount] = useState<string>('');
   const [step, setStep] = useState<'form' | 'confirmation' | 'processing'>('form');
   const [simulationData, setSimulationData] = useState<any>(null);
@@ -90,114 +86,6 @@ export function DepositModal({ tokenBalances }: DepositModalProps) {
     }
   };
 
-  const checkVaultAndAtaStatus = async (tokenMint: PublicKey) => {
-    if (!publicKey || !embeddedWallet) {
-      console.error('Wallet not connected');
-      return { success: false, ata: null, error: 'Wallet not connected' };
-    }
-
-    try {
-      console.log(`Starting vault and ATA status check for ${selectedToken}...`);
-      const createKey = publicKey;
-      const [multisigPda] = multisig.getMultisigPda({ createKey });
-      const [vaultPda] = multisig.getVaultPda({ multisigPda, index: 0 });
-
-      const ata = await getAssociatedTokenAddress(
-        tokenMint,
-        vaultPda,
-        true,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID,
-      );
-
-      // Log all the addresses for debugging
-      console.log('Addresses:', {
-        userPublicKey: publicKey.toBase58(),
-        multisigPda: multisigPda.toBase58(),
-        vaultPda: vaultPda.toBase58(),
-        ata: ata.toBase58(),
-        token: selectedToken,
-      });
-
-      // Check if ATA already exists
-      let tokenAccount = null;
-      try {
-        tokenAccount = await solanaService.getSolanaAccount(ata.toBase58(), 'confirmed');
-      } catch (error) {
-        console.log(`ATA check error (expected if not yet created):`, error);
-      }
-
-      const ataExists = tokenAccount !== null;
-
-      if (!ataExists) {
-        console.log(`Initializing vault and creating ATA for ${selectedToken}...`);
-        let initAttempts = 0;
-        const maxAttempts = 3;
-
-        while (initAttempts < maxAttempts) {
-          try {
-            console.log(`Initialization attempt ${initAttempts + 1}`);
-            const response = await fetch('/api/organizations/init-fund-token-vault', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userWallet: publicKey.toBase58(),
-                multisigPda: multisigPda.toBase58(),
-                tokenMint: tokenMint.toBase58(),
-              }),
-            });
-
-            if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.error || 'Failed to initialize vault');
-            }
-
-            const data = await response.json();
-            console.log('Init response:', data);
-
-            if (!data.signature) {
-              throw new Error('No signature returned from initialization');
-            }
-
-            // Wait for initial confirmation
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-
-            await solanaService.confirmTransactionWithRetry(data.signature, 'confirmed', 3, 30000);
-
-            // Additional verification wait
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            // Verify ATA creation
-            const verifyAta = await solanaService.getSolanaAccount(ata.toBase58(), 'confirmed');
-            if (verifyAta) {
-              console.log(`Setup verified successfully for ${selectedToken}`);
-              return { success: true, ata };
-            }
-
-            throw new Error('Setup verification failed');
-          } catch (initError: unknown) {
-            console.error(`Initialization attempt ${initAttempts + 1} failed:`, initError);
-            initAttempts++;
-
-            if (initAttempts === maxAttempts) {
-              throw new Error(
-                initError instanceof Error ? initError.message : 'Failed to initialize',
-              );
-            }
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-          }
-        }
-      }
-
-      return { success: true, ata };
-    } catch (error: unknown) {
-      console.error(`Vault/ATA initialization error for ${selectedToken}:`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize vault';
-      toast.error(errorMessage);
-      return { success: false, ata: null, error: errorMessage };
-    }
-  };
-
   const handleSimulateTransfer = async () => {
     if (!publicKey || !organization?.id || !selectedPaymentMethod) {
       toast.error('Missing required information');
@@ -212,16 +100,15 @@ export function DepositModal({ tokenBalances }: DepositModalProps) {
 
     setIsSubmitting(true);
     try {
-      // First check/create the vault for the selected token
-      const tokenMint = TOKENS[selectedToken].mint;
-      const vaultResult = await checkVaultAndAtaStatus(tokenMint);
+      // Ensure vault and ATA are set up for the selected stablecoin
+      const vaultResult = await multisigService.ensureVaultTokenAccount(publicKey, selectedToken);
 
       if (!vaultResult.success || !vaultResult.ata) {
         throw new Error(vaultResult.error || 'Failed to initialize vault');
       }
 
       // Now simulate the transfer via Zynk
-      const response = await axios.post('/api/onramp/simulate', {
+      const response = await axios.post('/api/ramp/onramp/simulate', {
         organizationId: organization.id,
         amount: amountValue,
         token: selectedToken,
@@ -253,7 +140,7 @@ export function DepositModal({ tokenBalances }: DepositModalProps) {
     setStep('processing');
 
     try {
-      const response = await axios.post('/api/onramp/execute', {
+      const response = await axios.post('/api/ramp/onramp/execute', {
         organizationId: organization.id,
         simulationId: simulationData.executionId,
       });
@@ -350,25 +237,25 @@ export function DepositModal({ tokenBalances }: DepositModalProps) {
         <DialogHeader>
           <DialogTitle>Deposit Funds</DialogTitle>
           <DialogDescription>
-            Fund your business wallet with your linked bank account.
+            Fund your business wallet with stablecoins using your linked bank account.
           </DialogDescription>
         </DialogHeader>
 
         {step === 'form' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Token</Label>
+              <Label>Stablecoin</Label>
               <Select
                 value={selectedToken}
-                onValueChange={(value: TokenType) => setSelectedToken(value)}
+                onValueChange={(value: StablecoinType) => setSelectedToken(value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a token" />
+                  <SelectValue placeholder="Select a stablecoin" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="USDC">USDC</SelectItem>
-                  <SelectItem value="USDT">USDT</SelectItem>
-                  <SelectItem value="EURC">EURC</SelectItem>
+                  <SelectItem value="USDC">USDC - US Dollar Coin</SelectItem>
+                  <SelectItem value="USDT">USDT - Tether USD</SelectItem>
+                  <SelectItem value="EURC">EURC - Euro Coin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -414,7 +301,8 @@ export function DepositModal({ tokenBalances }: DepositModalProps) {
 
             <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
               <p>
-                This will deposit funds to your business wallet using your linked payment method
+                This will deposit {selectedToken} to your business wallet using your linked payment
+                method
               </p>
             </div>
 

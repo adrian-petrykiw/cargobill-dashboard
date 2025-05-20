@@ -1,4 +1,4 @@
-// pages/api/offramp/execute.ts
+// pages/api/ramp/offramp/execute.ts
 import type { NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/api/requests';
 import { ApiError } from '@/types/api/errors';

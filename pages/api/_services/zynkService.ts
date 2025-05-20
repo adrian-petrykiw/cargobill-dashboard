@@ -11,7 +11,7 @@ import {
 } from '@/types/zynk';
 
 const ZYNK_API_KEY = process.env.ZYNK_API_KEY;
-const ZYNK_API_URL = 'https://qaapi.zynklabs.xyz/api/v1';
+const ZYNK_API_URL = process.env.ZYNK_API_BASE_URL;
 
 const zynkClient: AxiosInstance = axios.create({
   baseURL: ZYNK_API_URL,
