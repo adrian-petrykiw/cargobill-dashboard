@@ -24,7 +24,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { FiChevronDown, FiPlus, FiTrash2, FiCheck } from 'react-icons/fi';
+import { CheckCircle, CalendarIcon } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -41,7 +43,6 @@ import {
 } from '@/schemas/vendor.schema';
 import { VendorDetails, VendorListItem } from '@/schemas/organization.schema';
 import { InvoiceFileUpload } from '@/components/common/InvoiceFileUpload';
-import { CalendarIcon } from 'lucide-react';
 
 interface VendorSelectionFormProps {
   walletAddress: string;
@@ -72,6 +73,11 @@ export function VendorSelectionForm({
   const filteredVendors = availableVendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(query.toLowerCase()),
   );
+
+  // Check if vendor details is verified (only works with VendorDetails type)
+  const isVendorVerified = (vendorDetails: VendorDetails) => {
+    return vendorDetails.verification_status === 'verified';
+  };
 
   // Extract custom fields from vendor preferences
   const getCustomFieldsFromPreferences = (vendorDetails: VendorDetails | null) => {
@@ -302,32 +308,6 @@ export function VendorSelectionForm({
                 )}
               />
 
-              {/* <Card className="bg-white">
-                <CardContent className="px-4 my-0 py-0">
-                  {!selectedVendor ? (
-                    <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
-                      Please select a vendor to view details
-                    </div>
-                  ) : isVendorLoading ? (
-                    <div className="space-y-1 p-0 m-0">
-                      <Skeleton className="h-[16px] w-[250px] bg-gray-400" />
-                      <Skeleton className="h-[14px] w-[200px] bg-gray-400" />
-                      <Skeleton className="h-[14px] w-[150px] bg-gray-400" />
-                    </div>
-                  ) : vendorDetails ? (
-                    <div className="p-0 m-0 gap-[2px]">
-                      <h4 className="font-semibold text-sm">{vendorDetails.name || 'NA'}</h4>
-                      <p className="text-xs text-muted-foreground">
-                        Address: {vendorDetails.primary_address || 'NA'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Phone #:{vendorDetails.business_details.phone || 'NA'}
-                      </p>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card> */}
-
               <Card className="bg-white">
                 <CardContent className="px-4 my-0 py-0">
                   {!selectedVendor ? (
@@ -342,7 +322,18 @@ export function VendorSelectionForm({
                     </div>
                   ) : vendorDetails ? (
                     <div className="p-0 m-0 gap-[2px]">
-                      <h4 className="font-semibold text-sm">{vendorDetails.name || 'NA'}</h4>
+                      <div className="flex items-center justify-between w-full">
+                        <h4 className="font-semibold text-sm">{vendorDetails.name || 'NA'}</h4>
+                        {isVendorVerified(vendorDetails) && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-green-100 text-green-800 border-green-200 text-xs px-2 py-0.5 flex items-center gap-1"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            Verified
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         Address: {vendorDetails.primary_address || 'NA'}
                       </p>

@@ -64,6 +64,30 @@ export function TransactionConfirmation({
   const [status, setStatus] = useState<StatusType>('initial');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Extract custom fields from vendor data
+  const extractCustomFields = (vendorData: EnrichedVendorFormValues) => {
+    const baseFields = new Set([
+      'vendor',
+      'invoices',
+      'tokenType',
+      'paymentDate',
+      'additionalInfo',
+      'totalAmount',
+      'sender',
+      'receiverDetails',
+    ]);
+
+    const customFields: Record<string, any> = {};
+
+    Object.entries(vendorData).forEach(([key, value]) => {
+      if (!baseFields.has(key) && value !== undefined && value !== null && value !== '') {
+        customFields[key] = value;
+      }
+    });
+
+    return customFields;
+  };
+
   const handleConfirmTransaction = async () => {
     if (!wallet || !organization?.id) {
       toast.error('Wallet or organization details missing');
@@ -191,6 +215,10 @@ export function TransactionConfirmation({
       );
       console.log('Receiver ATA:', receiverAta.toString());
 
+      // Extract custom fields from vendor data
+      const customFields = extractCustomFields(vendorData);
+      console.log('Custom fields extracted:', customFields);
+
       // Process each invoice
       for (const invoice of vendorData.invoices as Invoice[]) {
         // Process and hash files if present
@@ -202,7 +230,7 @@ export function TransactionConfirmation({
           );
         }
 
-        // Create and encrypt invoice data
+        // Create and encrypt invoice data - include custom fields dynamically
         const invoiceData = {
           invoice: {
             number: invoice.number,
@@ -212,9 +240,10 @@ export function TransactionConfirmation({
           vendor: vendorData.vendor,
           paymentMethod: paymentData.paymentMethod,
           tokenType: paymentData.tokenType,
+          paymentDate: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
           timestamp: Date.now(),
           additionalInfo: vendorData.additionalInfo || '',
-          relatedBolAwb: vendorData.relatedBolAwb || '',
+          customFields: customFields,
         };
 
         const { encrypted: encryptedData, key: encryptionKey } = encryptPaymentData(invoiceData);
@@ -458,7 +487,7 @@ export function TransactionConfirmation({
 
         console.log('Execute transaction confirmed.');
 
-        // Store transaction data
+        // Store transaction data - include custom fields in metadata
         const transactionData = {
           organization_id: organization.id,
           signature: executeSignature,
@@ -492,7 +521,11 @@ export function TransactionConfirmation({
           ],
           status: 'confirmed',
           restricted_payment_methods: [],
-          metadata: {},
+          metadata: {
+            custom_fields: customFields,
+            payment_date: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
+            additional_info: vendorData.additionalInfo || '',
+          },
         };
 
         // Store the transaction in the database
@@ -584,35 +617,38 @@ export function TransactionConfirmation({
               </div>
             </div>
 
-            {/* Dynamic Fields */}
-            {Object.entries(vendorData || {})
-              .filter(([key, value]) => {
-                return !(
-                  key === 'vendor' ||
-                  key === 'invoices' ||
-                  key === 'sender' ||
-                  key === 'receiver' ||
-                  key === 'amount' ||
-                  key === 'tokenType' ||
-                  key === 'receiverDetails' ||
-                  key === 'totalAmount' ||
-                  typeof value === 'object' ||
-                  !value
-                );
-              })
-              .map(([key, value]) => {
-                const formattedKey = key
-                  .replace(/([A-Z])/g, ' $1')
-                  .replace(/_/g, ' ')
-                  .replace(/^./, (str) => str.toUpperCase());
+            {/* Dynamic Custom Fields Display */}
+            {Object.entries(extractCustomFields(vendorData)).map(([key, value]) => {
+              const formattedKey = key
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/_/g, ' ')
+                .replace(/^./, (str) => str.toUpperCase());
 
-                return (
-                  <div key={key}>
-                    <p className="font-medium text-xs mb-2">{formattedKey}</p>
-                    <p className="text-xs text-muted-foreground">{String(value)}</p>
-                  </div>
-                );
-              })}
+              return (
+                <div key={key}>
+                  <p className="font-medium text-xs mb-2">{formattedKey}</p>
+                  <p className="text-xs text-muted-foreground">{String(value)}</p>
+                </div>
+              );
+            })}
+
+            {/* Payment Date */}
+            {vendorData.paymentDate && (
+              <div>
+                <p className="font-medium text-xs mb-2">Payment Date</p>
+                <p className="text-xs text-muted-foreground">
+                  {vendorData.paymentDate.toLocaleDateString()}
+                </p>
+              </div>
+            )}
+
+            {/* Additional Info */}
+            {vendorData.additionalInfo && (
+              <div>
+                <p className="font-medium text-xs mb-2">Additional Notes</p>
+                <p className="text-xs text-muted-foreground">{vendorData.additionalInfo}</p>
+              </div>
+            )}
           </div>
         </div>
 
