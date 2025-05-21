@@ -26,7 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { FiChevronDown, FiPlus, FiTrash2, FiCheck } from 'react-icons/fi';
-import { CheckCircle, CalendarIcon } from 'lucide-react';
+import { CheckCircle, AlertCircle, CalendarIcon } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -324,13 +324,21 @@ export function VendorSelectionForm({
                     <div className="p-0 m-0 gap-[2px]">
                       <div className="flex items-center justify-between w-full">
                         <h4 className="font-semibold text-sm">{vendorDetails.name || 'NA'}</h4>
-                        {isVendorVerified(vendorDetails) && (
+                        {isVendorVerified(vendorDetails) ? (
                           <Badge
                             variant="secondary"
-                            className="bg-green-100 text-green-800 border-green-200 text-xs px-2 py-0.5 flex items-center gap-1"
+                            className="bg-green-100 text-green-800 border-green-200 text-xs px-2 py-0.5 flex items-center gap-1 rounded-sm"
                           >
                             <CheckCircle className="h-3 w-3" />
                             Verified
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className="bg-red-100 text-red-800 border-red-200 text-xs px-2 py-0.5 flex items-center gap-1 rounded-sm"
+                          >
+                            <AlertCircle className="h-3 w-3" />
+                            Unverified
                           </Badge>
                         )}
                       </div>
