@@ -39,6 +39,7 @@ export const organizationSchema = z.object({
   created_by: z.string().uuid().nullable().optional(),
   data_vault_id: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
+  fbo_account_id: z.string().nullable().optional(), // New field
   global_organization_id: z.string().nullable().optional(),
   industry: z.string().nullable().optional(),
   invited_at: z.string().nullable().optional(),
@@ -60,11 +61,7 @@ export const organizationSchema = z.object({
 
 export type Organization = z.infer<typeof organizationSchema>;
 
-// Extend organization schema for vendors - keep the original structure but add multisigAddress
-export const vendorSchema = organizationSchema.extend({
-  multisigAddress: z.string().optional(),
-  // We don't override business_details here since it accepts any JSON already
-});
+export const vendorSchema = organizationSchema;
 
 // Simple vendor list item schema
 export const vendorListItemSchema = z.object({
@@ -84,6 +81,7 @@ export const createOrganizationSchema = organizationSchema
     created_by: true,
     updated_at: true,
     data_vault_id: true,
+    fbo_account_id: true, // Add this to omitted fields for create schema
     global_organization_id: true,
     invited_at: true,
     invited_by: true,

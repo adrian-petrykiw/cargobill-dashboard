@@ -40,6 +40,8 @@ import {
   EnrichedVendorFormValues,
 } from '@/schemas/vendor.schema';
 import { VendorDetails, VendorListItem } from '@/schemas/organization.schema';
+import { InvoiceFileUpload } from '@/components/common/InvoiceFileUpload';
+import { CalendarIcon } from 'lucide-react';
 
 interface VendorSelectionFormProps {
   walletAddress: string;
@@ -63,12 +65,31 @@ export function VendorSelectionForm({
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
   const [vendorDetails, setVendorDetails] = useState<VendorDetails | null>(null);
   const [isVendorLoading, setIsVendorLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formSchema, setFormSchema] = useState(() => createVendorFormSchema());
 
   // Filter vendors based on search query
   const filteredVendors = availableVendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(query.toLowerCase()),
   );
+
+  // Extract custom fields from vendor preferences
+  const getCustomFieldsFromPreferences = (vendorDetails: VendorDetails | null) => {
+    if (!vendorDetails?.preferences) return [];
+
+    try {
+      // Parse preferences if it's a string, otherwise use as object
+      const preferences =
+        typeof vendorDetails.preferences === 'string'
+          ? JSON.parse(vendorDetails.preferences)
+          : vendorDetails.preferences;
+
+      return preferences?.customFields || [];
+    } catch (error) {
+      console.error('Error parsing vendor preferences:', error);
+      return [];
+    }
+  };
 
   // Fetch vendor details when selected
   useEffect(() => {
@@ -90,9 +111,12 @@ export function VendorSelectionForm({
         // Set only the data property as vendorDetails
         setVendorDetails(result.data);
 
-        // Update the form schema with custom fields
-        if (result.data.business_details?.customFields) {
-          setFormSchema(createVendorFormSchema(result.data.business_details.customFields));
+        // Update the form schema with custom fields from preferences
+        const customFields = getCustomFieldsFromPreferences(result.data);
+        if (customFields.length > 0) {
+          setFormSchema(createVendorFormSchema(customFields));
+        } else {
+          setFormSchema(createVendorFormSchema());
         }
       } catch (error) {
         console.error('Error fetching vendor details:', error);
@@ -107,15 +131,15 @@ export function VendorSelectionForm({
   // Create default values matching the schema
   const defaultValues: DefaultValues<VendorFormValues> = {
     vendor: '',
-    invoices: [{ number: '', amount: 0 }],
+    invoices: [{ number: '', amount: 0, files: [] }],
     tokenType: 'USDC',
+    paymentDate: new Date(),
     additionalInfo: '',
-    relatedBolAwb: '',
   };
 
   // Initialize form with schema
   const form = useForm<VendorFormValues>({
-    resolver: zodResolver(formSchema) as any, // Type assertion to fix resolver type issue
+    resolver: zodResolver(formSchema) as any,
     defaultValues,
   });
 
@@ -137,21 +161,20 @@ export function VendorSelectionForm({
       const currentValues = form.getValues();
       const newValues = { ...currentValues, vendor: selectedVendor || '' };
 
-      // Handle custom fields if they exist
-      if (vendorDetails.business_details?.customFields) {
-        vendorDetails.business_details.customFields.forEach(
-          (field: {
-            key: string;
-            name: string;
-            type: string;
-            required: boolean;
-            defaultValue?: any;
-          }) => {
-            // Use type assertion to tell TypeScript this is a valid key
-            (newValues as any)[field.key] = field.defaultValue || '';
-          },
-        );
-      }
+      // Handle custom fields from preferences if they exist
+      const customFields = getCustomFieldsFromPreferences(vendorDetails);
+      customFields.forEach(
+        (field: {
+          key: string;
+          name: string;
+          type: string;
+          required: boolean;
+          defaultValue?: any;
+        }) => {
+          // Use type assertion to tell TypeScript this is a valid key
+          (newValues as any)[field.key] = field.defaultValue || '';
+        },
+      );
 
       // Reset form with new values
       form.reset(newValues);
@@ -160,15 +183,23 @@ export function VendorSelectionForm({
 
   // Handle form submission
   const handleSubmit: SubmitHandler<VendorFormValues> = (data) => {
-    // Enrich the data with additional context
-    const enrichedData: EnrichedVendorFormValues = {
-      ...data,
-      totalAmount,
-      sender: walletAddress,
-      receiverDetails: vendorDetails,
-    };
+    setIsSubmitting(true);
 
-    onNext(enrichedData);
+    try {
+      // Enrich the data with additional context
+      const enrichedData: EnrichedVendorFormValues = {
+        ...data,
+        totalAmount,
+        sender: walletAddress,
+        receiverDetails: vendorDetails,
+      };
+
+      onNext(enrichedData);
+    } catch (error) {
+      console.error('Form submission error:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isVendorsLoading) {
@@ -202,11 +233,11 @@ export function VendorSelectionForm({
           <form
             id="vendor-form"
             onSubmit={form.handleSubmit(handleSubmit as any)}
-            className="space-y-6"
+            className="space-y-4"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
-                control={form.control as any} // Type assertion to fix control type issue
+                control={form.control as any}
                 name="vendor"
                 render={({ field }) => (
                   <FormItem className="md:flex md:flex-col md:justify-end">
@@ -271,7 +302,7 @@ export function VendorSelectionForm({
                 )}
               />
 
-              <Card className="bg-white">
+              {/* <Card className="bg-white">
                 <CardContent className="px-4 my-0 py-0">
                   {!selectedVendor ? (
                     <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
@@ -291,6 +322,32 @@ export function VendorSelectionForm({
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Phone #:{vendorDetails.business_details.phone || 'NA'}
+                      </p>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card> */}
+
+              <Card className="bg-white">
+                <CardContent className="px-4 my-0 py-0">
+                  {!selectedVendor ? (
+                    <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
+                      Please select a vendor to view details
+                    </div>
+                  ) : isVendorLoading ? (
+                    <div className="space-y-1 p-0 m-0">
+                      <Skeleton className="h-[16px] w-[250px] bg-gray-400" />
+                      <Skeleton className="h-[14px] w-[200px] bg-gray-400" />
+                      <Skeleton className="h-[14px] w-[150px] bg-gray-400" />
+                    </div>
+                  ) : vendorDetails ? (
+                    <div className="p-0 m-0 gap-[2px]">
+                      <h4 className="font-semibold text-sm">{vendorDetails.name || 'NA'}</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Address: {vendorDetails.primary_address || 'NA'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Phone #: {vendorDetails.business_details?.phone || 'NA'}
                       </p>
                     </div>
                   ) : null}
@@ -326,26 +383,29 @@ export function VendorSelectionForm({
                 />
 
                 <div className="space-y-4">
-                  <div className="flex mb-[-12px] gap-6">
-                    <div className="w-[50%]">
-                      <FormLabel>Invoices</FormLabel>
+                  <div className="flex mb-[-12px] gap-4">
+                    <div className="w-[30%]">
+                      <FormLabel className="text-sm w-full flex">Invoices</FormLabel>
                     </div>
-                    <div className={`w-[50%] ${fields.length > 1 ? `mr-[3px]` : `mr-16`}`}>
-                      <FormLabel className="text-sm text-muted-foreground w-full flex">
+                    <div className="w-[30%]">
+                      <FormLabel className="text-sm w-full flex">
                         Amount ({form.watch('tokenType')})
                       </FormLabel>
+                    </div>
+                    <div className="w-[30%]">
+                      <FormLabel className="text-sm">Files</FormLabel>
                     </div>
                     {fields.length > 1 && <div className="w-10" />}
                   </div>
 
                   {fields.map((field, index) => (
                     <div key={field.id} className="space-y-2">
-                      <div className="flex gap-6 w-full">
+                      <div className="flex gap-4 w-full items-center">
                         <FormField
-                          control={form.control as any} // Type assertion to fix control type issue
+                          control={form.control as any}
                           name={`invoices.${index}.number`}
                           render={({ field }) => (
-                            <FormItem className="w-[50%]">
+                            <FormItem className="w-[30%]">
                               <FormControl>
                                 <Input placeholder="Enter invoice number" {...field} />
                               </FormControl>
@@ -354,10 +414,10 @@ export function VendorSelectionForm({
                           )}
                         />
                         <FormField
-                          control={form.control as any} // Type assertion to fix control type issue
+                          control={form.control as any}
                           name={`invoices.${index}.amount`}
                           render={({ field }) => (
-                            <FormItem className="w-[50%]">
+                            <FormItem className="w-[30%]">
                               <FormControl>
                                 <Input
                                   type="number"
@@ -366,6 +426,24 @@ export function VendorSelectionForm({
                                   onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                                 />
                               </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control as any}
+                          name={`invoices.${index}.files`}
+                          render={({ field }) => (
+                            <FormItem className="w-[30%]">
+                              <InvoiceFileUpload
+                                files={field.value || []}
+                                onFilesChange={(files) =>
+                                  form.setValue(`invoices.${index}.files`, files)
+                                }
+                                disabled={isSubmitting}
+                                index={index}
+                              />
                               <FormMessage />
                             </FormItem>
                           )}
@@ -385,7 +463,7 @@ export function VendorSelectionForm({
                       {index === fields.length - 1 && (
                         <button
                           type="button"
-                          onClick={() => append({ number: '', amount: 0 })}
+                          onClick={() => append({ number: '', amount: 0, files: [] })}
                           className="w-full text-center pt-2 text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-center gap-2"
                         >
                           <FiPlus className="h-4 w-4" />
@@ -396,8 +474,8 @@ export function VendorSelectionForm({
                   ))}
                 </div>
 
-                {/* Custom fields from vendor */}
-                {vendorDetails.business_details?.customFields?.map(
+                {/* Dynamic custom fields from vendor preferences */}
+                {getCustomFieldsFromPreferences(vendorDetails).map(
                   (field: {
                     key: string;
                     name: string;
@@ -405,13 +483,12 @@ export function VendorSelectionForm({
                     required: boolean;
                     defaultValue?: any;
                   }) => {
-                    // We need to cast this to 'any' since the field keys are dynamic
                     const fieldName = field.key as any;
 
                     return (
                       <FormField
                         key={field.key}
-                        control={form.control as any} // Type assertion to fix control type issue
+                        control={form.control as any}
                         name={fieldName}
                         render={({ field: formField }) => (
                           <FormItem>
@@ -438,21 +515,7 @@ export function VendorSelectionForm({
                 )}
 
                 <FormField
-                  control={form.control as any} // Type assertion to fix control type issue
-                  name="relatedBolAwb"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Bill of Lading / AWB Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter BOL/AWB number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control as any} // Type assertion to fix control type issue
+                  control={form.control as any}
                   name="additionalInfo"
                   render={({ field }) => (
                     <FormItem>
@@ -469,12 +532,42 @@ export function VendorSelectionForm({
                   )}
                 />
 
-                <div className="rounded-lg bg-muted/50 p-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium">Total Amount</h3>
-                    <p className="text-lg font-bold">
-                      {totalAmount.toFixed(2)} {form.watch('tokenType')}
-                    </p>
+                {/* Payment Date and Total Amount Section - styled like old POC */}
+                <div className="grid grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="paymentDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-end  flex justify-start  ">
+                          Payment Date
+                        </FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type="date"
+                              value={field.value.toISOString().split('T')[0]}
+                              disabled
+                              className="border-slate-400 text-slate-700 bg-slate-300 cursor-not-allowed"
+                            />
+                            <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="space-y-2">
+                    <FormLabel className="text-end flex justify-end">
+                      Total Amount ({form.watch('tokenType')})
+                    </FormLabel>
+                    <Input
+                      type="number"
+                      value={totalAmount.toFixed(2)}
+                      disabled
+                      className="border-slate-400 text-slate-700 bg-slate-300 cursor-not-allowed text-end  px-0"
+                    />
                   </div>
                 </div>
               </div>
@@ -487,9 +580,9 @@ export function VendorSelectionForm({
             type="submit"
             form="vendor-form"
             className="w-full"
-            disabled={isVendorLoading || !selectedVendor}
+            disabled={isVendorLoading || !selectedVendor || isSubmitting}
           >
-            Next
+            {isSubmitting ? 'Processing...' : 'Next'}
           </Button>
         </div>
       </div>
