@@ -193,7 +193,7 @@ export default function Dashboard() {
                 <div className="text-xs text-gray-500">Total Yield</div>
                 <div className="text-lg font-semibold">
                   $0.00 USD
-                  <span className="text-green-500 text-xs">+0.00%</span>
+                  <span className="text-green-500 text-xs ml-2">+0.00%</span>
                 </div>
               </div>
               <div className="aspect-[16/6] w-full bg-gray-100 rounded-md mb-0">

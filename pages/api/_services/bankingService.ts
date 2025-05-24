@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 // Banking API configuration
 const BANKING_API_KEY = process.env.BANKING_API_KEY;
 const BANKING_API_URL = process.env.BANKING_API_URL;
+const BANKING_CUSTOMER_ID = process.env.BANKING_CUSTOMER_ID;
 
 // Types for Banking API
 export interface BankingTransaction {
@@ -45,13 +46,14 @@ export interface AccountInfoParams {
 }
 
 export interface AccountDetail {
-  account_id: string;
+  account_id: string | number;
   account_type: string;
   account_name: string;
   account_status: string;
   routing_num: string;
   account_num: string;
   routing_account: string;
+  balance?: string;
 }
 
 export interface AccountInfoResponse {
@@ -69,6 +71,7 @@ const bankingClient: AxiosInstance = axios.create({
     'x-api-key': BANKING_API_KEY,
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 second timeout
 });
 
 // Error handling function
@@ -78,6 +81,12 @@ const handleBankingError = (error: unknown, operation: string) => {
     console.error(`Banking ${operation} error:`, {
       status: axiosError.response?.status,
       data: axiosError.response?.data,
+      config: {
+        url: axiosError.config?.url,
+        method: axiosError.config?.method,
+        headers: axiosError.config?.headers,
+        data: axiosError.config?.data,
+      },
     });
   } else {
     console.error(`Banking ${operation} error:`, error);
@@ -87,16 +96,27 @@ const handleBankingError = (error: unknown, operation: string) => {
 
 /**
  * Create a new sub-account under our main FBO account
- * @param customerID Our organization's customer ID
  * @returns Response with the new bank sub-account ID
  */
-export async function createSubAccount(customerID: string): Promise<CreateSubAccountResponse> {
+export async function createSubAccount(): Promise<CreateSubAccountResponse> {
   try {
+    if (!BANKING_CUSTOMER_ID) {
+      throw new Error('Banking customer ID is not configured');
+    }
+
+    if (!BANKING_API_KEY || !BANKING_API_URL) {
+      throw new Error('Banking API configuration is incomplete');
+    }
+
+    console.log('Creating sub-account with customerID:', BANKING_CUSTOMER_ID);
+
     // Note: The API expects "accountID" but this is actually the customerID
     // This is a naming inconsistency in the Slipstream API
     const response = await bankingClient.post('/workflows/CreateAccount', {
-      accountID: customerID,
+      accountID: BANKING_CUSTOMER_ID,
     });
+
+    console.log('Sub-account creation response:', response.data);
     return response.data;
   } catch (error) {
     return handleBankingError(error, 'create sub-account');
@@ -106,18 +126,29 @@ export async function createSubAccount(customerID: string): Promise<CreateSubAcc
 /**
  * Get account information for a sub-account
  * @param bankAccountID The bank sub-account ID
- * @param customerID Our organization's customer ID
  * @returns Account details
  */
-export async function getAccountInfo(
-  bankAccountID: string,
-  customerID: string,
-): Promise<AccountInfoResponse> {
+export async function getAccountInfo(bankAccountID: string): Promise<AccountInfoResponse> {
   try {
+    if (!BANKING_CUSTOMER_ID) {
+      throw new Error('Banking customer ID is not configured');
+    }
+
+    if (!BANKING_API_KEY || !BANKING_API_URL) {
+      throw new Error('Banking API configuration is incomplete');
+    }
+
+    console.log('Getting account info for:', {
+      bankAccountID,
+      customerID: BANKING_CUSTOMER_ID,
+    });
+
     const response = await bankingClient.post('/workflows/AccountInfo', {
-      customerID,
+      customerID: BANKING_CUSTOMER_ID,
       accountID: bankAccountID,
     });
+
+    console.log('Account info response:', response.data);
     return response.data;
   } catch (error) {
     return handleBankingError(error, 'get account info');
@@ -135,8 +166,26 @@ export async function getTransactionHistory(
   options: Omit<TransactionsParams, 'accountID'> = {},
 ): Promise<TransactionsResponse> {
   try {
+    if (!BANKING_API_KEY || !BANKING_API_URL) {
+      throw new Error('Banking API configuration is incomplete');
+    }
+
+    console.log('Getting transaction history for:', {
+      bankAccountID,
+      options,
+    });
+
     const params = { accountID: bankAccountID, ...options };
     const response = await bankingClient.post('/workflows/Transactions', params);
+
+    console.log('Transaction history response:', response.data);
+
+    // Ensure we return a valid response structure
+    if (!response.data || !Array.isArray(response.data.values)) {
+      console.warn('Invalid transaction response structure:', response.data);
+      return { values: [] };
+    }
+
     return response.data;
   } catch (error) {
     return handleBankingError(error, 'get transaction history');
@@ -165,12 +214,11 @@ export async function getTransactionById(
 /**
  * Check if a sub-account exists and is active
  * @param bankAccountID The sub-account ID to check
- * @param customerID Our organization's customer ID
  * @returns Boolean indicating if account is active
  */
-export async function isAccountActive(bankAccountID: string, customerID: string): Promise<boolean> {
+export async function isAccountActive(bankAccountID: string): Promise<boolean> {
   try {
-    const accountInfo = await getAccountInfo(bankAccountID, customerID);
+    const accountInfo = await getAccountInfo(bankAccountID);
     if (!accountInfo.AccountDetail || accountInfo.AccountDetail.length === 0) {
       return false;
     }
@@ -184,15 +232,11 @@ export async function isAccountActive(bankAccountID: string, customerID: string)
 /**
  * Get sub-account details including routing and account numbers
  * @param bankAccountID The sub-account ID to get details for
- * @param customerID Our organization's customer ID
  * @returns Account details including routing and account numbers
  */
-export async function getAccountDetails(
-  bankAccountID: string,
-  customerID: string,
-): Promise<AccountDetail | null> {
+export async function getAccountDetails(bankAccountID: string): Promise<AccountDetail | null> {
   try {
-    const accountInfo = await getAccountInfo(bankAccountID, customerID);
+    const accountInfo = await getAccountInfo(bankAccountID);
     if (!accountInfo.AccountDetail || accountInfo.AccountDetail.length === 0) {
       return null;
     }
