@@ -1,12 +1,18 @@
 // features/transactions/components/TransactionConfirmation.tsx
-import { JSXElementConstructor, Key, ReactElement, ReactNode, ReactPortal, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { toast } from 'react-hot-toast';
-import { getMultisigPda, getVaultPda } from '@sqds/multisig';
+import {
+  getMultisigPda,
+  getVaultPda,
+  getTransactionPda,
+  accounts,
+  instructions,
+  PROGRAM_ID,
+} from '@sqds/multisig';
 import { Organization } from '@/schemas/organization.schema';
 import { TransactionStatus } from './TransactionStatus';
 import { solanaService } from '@/services/blockchain/solana';
@@ -22,6 +28,19 @@ import {
 import { EnrichedVendorFormValues } from '@/schemas/vendor.schema';
 import { PaymentDetailsFormValues } from '@/schemas/vendor.schema';
 import { formatPaymentMethod } from '@/lib/formatters/payment-method';
+import { TransactionMessage } from '@solana/web3.js';
+import {
+  getAccountsForExecuteCore,
+  transactionMessageToVaultMessage,
+  vaultTransactionExecuteSync,
+} from '@/lib/helpers/squadsUtils';
+
+// Clean interface for Invoice type
+interface Invoice {
+  number: string;
+  amount: number;
+  files?: File[];
+}
 
 interface TransactionConfirmationProps {
   onClose: () => void;
@@ -45,6 +64,30 @@ export function TransactionConfirmation({
   const [status, setStatus] = useState<StatusType>('initial');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Extract custom fields from vendor data
+  const extractCustomFields = (vendorData: EnrichedVendorFormValues) => {
+    const baseFields = new Set([
+      'vendor',
+      'invoices',
+      'tokenType',
+      'paymentDate',
+      'additionalInfo',
+      'totalAmount',
+      'sender',
+      'receiverDetails',
+    ]);
+
+    const customFields: Record<string, any> = {};
+
+    Object.entries(vendorData).forEach(([key, value]) => {
+      if (!baseFields.has(key) && value !== undefined && value !== null && value !== '') {
+        customFields[key] = value;
+      }
+    });
+
+    return customFields;
+  };
+
   const handleConfirmTransaction = async () => {
     if (!wallet || !organization?.id) {
       toast.error('Wallet or organization details missing');
@@ -54,6 +97,26 @@ export function TransactionConfirmation({
     try {
       setIsProcessing(true);
       setStatus('encrypting');
+
+      // Hash file function
+      const hashFile = async (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            try {
+              const arrayBuffer = e.target?.result as ArrayBuffer;
+              const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+              const hashArray = Array.from(new Uint8Array(hashBuffer));
+              const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+              resolve(hashHex);
+            } catch (err) {
+              reject(err);
+            }
+          };
+          reader.onerror = () => reject(new Error('Error reading file'));
+          reader.readAsArrayBuffer(file);
+        });
+      };
 
       // Encrypt payment data for transaction memo
       const encryptPaymentData = (data: any) => {
@@ -71,6 +134,7 @@ export function TransactionConfirmation({
       // Storage for encryption keys and hashes
       const encryptionKeys: Record<string, string> = {};
       const paymentHashes: Record<string, string> = {};
+      const fileHashes: Record<string, string[]> = {};
 
       // Get organization's multisig address
       if (!organization.operational_wallet?.address) {
@@ -93,8 +157,32 @@ export function TransactionConfirmation({
           ? USDC_MINT.toString()
           : paymentData.tokenType === 'USDT'
             ? TOKENS.USDT.mint.toString()
-            : TOKENS.SOL.mint.toString(),
+            : paymentData.tokenType === 'EURC'
+              ? TOKENS.EURC.mint.toString()
+              : (() => {
+                  console.error(`Invalid token type: ${paymentData.tokenType}`);
+                  throw new Error(`Unsupported token type: ${paymentData.tokenType}`);
+                })(),
       );
+
+      // Get connection from solanaService
+      const connection = solanaService.connection;
+
+      // Get Multisig account info
+      let senderMultisigInfo;
+      try {
+        senderMultisigInfo = await accounts.Multisig.fromAccountAddress(
+          connection,
+          multisigAddress,
+        );
+        console.log("Found sender's multisig:", {
+          threshold: senderMultisigInfo.threshold.toString(),
+          transactionIndex: senderMultisigInfo.transactionIndex.toString(),
+        });
+      } catch (err) {
+        console.error("Failed to find sender's multisig account:", err);
+        throw new Error("Sender's multisig account not found");
+      }
 
       const vaultAta = await getAssociatedTokenAddress(
         tokenMint,
@@ -127,20 +215,35 @@ export function TransactionConfirmation({
       );
       console.log('Receiver ATA:', receiverAta.toString());
 
+      // Extract custom fields from vendor data
+      const customFields = extractCustomFields(vendorData);
+      console.log('Custom fields extracted:', customFields);
+
       // Process each invoice
-      for (const invoice of vendorData.invoices) {
-        // Create and encrypt invoice data
+      for (const invoice of vendorData.invoices as Invoice[]) {
+        // Process and hash files if present
+        if (invoice.files && invoice.files.length > 0) {
+          const hashPromises = invoice.files.map((file) => hashFile(file));
+          fileHashes[invoice.number] = await Promise.all(hashPromises);
+          console.log(
+            `Generated ${fileHashes[invoice.number].length} file hashes for invoice ${invoice.number}`,
+          );
+        }
+
+        // Create and encrypt invoice data - include custom fields dynamically
         const invoiceData = {
           invoice: {
             number: invoice.number,
             amount: invoice.amount,
+            fileHashes: fileHashes[invoice.number] || [],
           },
           vendor: vendorData.vendor,
           paymentMethod: paymentData.paymentMethod,
           tokenType: paymentData.tokenType,
+          paymentDate: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
           timestamp: Date.now(),
           additionalInfo: vendorData.additionalInfo || '',
-          relatedBolAwb: vendorData.relatedBolAwb || '',
+          customFields: customFields,
         };
 
         const { encrypted: encryptedData, key: encryptionKey } = encryptPaymentData(invoiceData);
@@ -166,6 +269,7 @@ export function TransactionConfirmation({
           h: paymentHashes[invoice.number],
           v: '1.0',
           i: invoice.number,
+          fh: fileHashes[invoice.number] || [],
         };
 
         // Use Solana memo program
@@ -175,25 +279,218 @@ export function TransactionConfirmation({
           data: Buffer.from(JSON.stringify(memoData)),
         };
 
-        // Here we would typically create, propose, approve, and execute the transaction
-        // using the Squads SDK, but for simplicity, we'll mock this process
+        // Get next transaction index
+        const currentTransactionIndex = Number(senderMultisigInfo.transactionIndex);
+        const newTransactionIndex = BigInt(currentTransactionIndex + 1);
+        console.log('Using transaction index:', newTransactionIndex.toString());
 
-        // Instead, we'll use our solanaService to simulate the transaction
+        // Create transaction message for transfer
+        const transferMessage = new TransactionMessage({
+          payerKey: vaultPda,
+          recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
+          instructions: [transferIx, memoIx],
+        });
+
+        console.log('Compiling vault message...');
+        const compiledMessage = transactionMessageToVaultMessage({
+          message: transferMessage,
+          addressLookupTableAccounts: [],
+          vaultPda: vaultPda,
+        });
+
+        // Get transaction PDA and accounts for execution
+        const [transactionPda] = getTransactionPda({
+          multisigPda: multisigAddress,
+          index: newTransactionIndex,
+        });
+
+        console.log('Getting execution accounts...');
+        const { accountMetas } = await getAccountsForExecuteCore({
+          connection: connection,
+          multisigPda: multisigAddress,
+          message: compiledMessage,
+          ephemeralSignerBumps: [0],
+          vaultIndex: 0,
+          transactionPda,
+          programId: PROGRAM_ID,
+        });
+
+        // Build instructions
+        console.log('Creating transaction instructions...');
+        const createIx = instructions.vaultTransactionCreate({
+          multisigPda: multisigAddress,
+          transactionIndex: newTransactionIndex,
+          creator: new PublicKey(wallet.address),
+          vaultIndex: 0,
+          ephemeralSigners: 0,
+          transactionMessage: transferMessage,
+          memo: `TX-${invoice.number}`,
+        });
+
+        const proposeIx = instructions.proposalCreate({
+          multisigPda: multisigAddress,
+          transactionIndex: newTransactionIndex,
+          creator: new PublicKey(wallet.address),
+        });
+
+        const approveIx = instructions.proposalApprove({
+          multisigPda: multisigAddress,
+          transactionIndex: newTransactionIndex,
+          member: new PublicKey(wallet.address),
+        });
+
+        const { instruction: executeIx } = vaultTransactionExecuteSync({
+          multisigPda: multisigAddress,
+          transactionIndex: newTransactionIndex,
+          member: new PublicKey(wallet.address),
+          accountsForExecute: accountMetas,
+          programId: PROGRAM_ID,
+        });
+
+        // Setup transactions
         setStatus('confirming');
 
-        // In a real implementation, we would:
-        // 1. Create transaction with Squads SDK
-        // 2. Add the transaction to the multisig
-        // 3. Approve the transaction
-        // 4. Execute the transaction
+        // Create the first transaction: Create
+        const createTx = new Transaction();
+        createTx.feePayer = new PublicKey(wallet.address);
+        createTx.add(createIx);
 
-        // For now, we'll just simulate a wait
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Get recent blockhash for transaction
+        const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+        createTx.recentBlockhash = latestBlockhash.blockhash;
 
-        // Simulate storing the transaction data
+        // Add priority fee to transaction
+        const createTxWithFee = await solanaService.addPriorityFee(
+          createTx,
+          new PublicKey(wallet.address),
+          false,
+        );
+
+        console.log('Signing create transaction...');
+        const signedCreateTx = await wallet.signTransaction(createTxWithFee);
+
+        console.log('Sending create transaction...');
+        const createSignature = await connection.sendRawTransaction(signedCreateTx.serialize(), {
+          skipPreflight: true,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3,
+        });
+
+        console.log('Create transaction sent with signature:', createSignature);
+
+        // Wait for confirmation
+        const createStatus = await solanaService.confirmTransactionWithRetry(
+          createSignature,
+          'confirmed',
+          10,
+          60000,
+          connection,
+        );
+
+        if (!createStatus || createStatus.err) {
+          throw new Error(
+            `Create transaction failed: ${createStatus ? JSON.stringify(createStatus.err) : 'No status returned'}`,
+          );
+        }
+
+        console.log('Create transaction confirmed. Waiting before next step...');
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        // Create the second transaction: Propose + Approve
+        const proposeTx = new Transaction();
+        proposeTx.feePayer = new PublicKey(wallet.address);
+        proposeTx.add(proposeIx, approveIx);
+
+        // Get fresh blockhash
+        const proposeBlockhash = await connection.getLatestBlockhash('confirmed');
+        proposeTx.recentBlockhash = proposeBlockhash.blockhash;
+
+        // Add priority fee
+        const proposeTxWithFee = await solanaService.addPriorityFee(
+          proposeTx,
+          new PublicKey(wallet.address),
+          false,
+        );
+
+        console.log('Signing propose+approve transaction...');
+        const signedProposeTx = await wallet.signTransaction(proposeTxWithFee);
+
+        console.log('Sending propose+approve transaction...');
+        const proposeSignature = await connection.sendRawTransaction(signedProposeTx.serialize(), {
+          skipPreflight: true,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3,
+        });
+
+        console.log('Propose+approve transaction sent with signature:', proposeSignature);
+
+        // Wait for confirmation
+        const proposeStatus = await solanaService.confirmTransactionWithRetry(
+          proposeSignature,
+          'confirmed',
+          10,
+          60000,
+          connection,
+        );
+
+        if (!proposeStatus || proposeStatus.err) {
+          throw new Error(
+            `Propose+approve transaction failed: ${proposeStatus ? JSON.stringify(proposeStatus.err) : 'No status returned'}`,
+          );
+        }
+
+        console.log('Propose+approve transaction confirmed. Waiting before execution...');
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        // Create the execution transaction
+        const executeTx = new Transaction();
+        executeTx.feePayer = new PublicKey(wallet.address);
+        executeTx.add(executeIx);
+
+        // Get fresh blockhash
+        const executeBlockhash = await connection.getLatestBlockhash('confirmed');
+        executeTx.recentBlockhash = executeBlockhash.blockhash;
+
+        // Add priority fee
+        const executeTxWithFee = await solanaService.addPriorityFee(
+          executeTx,
+          new PublicKey(wallet.address),
+          false,
+        );
+
+        console.log('Signing execute transaction...');
+        const signedExecuteTx = await wallet.signTransaction(executeTxWithFee);
+
+        console.log('Sending execute transaction...');
+        const executeSignature = await connection.sendRawTransaction(signedExecuteTx.serialize(), {
+          skipPreflight: true,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3,
+        });
+
+        console.log('Execute transaction sent with signature:', executeSignature);
+
+        // Wait for confirmation
+        const executeStatus = await solanaService.confirmTransactionWithRetry(
+          executeSignature,
+          'confirmed',
+          10,
+          60000,
+          connection,
+        );
+
+        if (!executeStatus || executeStatus.err) {
+          throw new Error(
+            `Execute transaction failed: ${executeStatus ? JSON.stringify(executeStatus.err) : 'No status returned'}`,
+          );
+        }
+
+        console.log('Execute transaction confirmed.');
+
+        // Store transaction data - include custom fields in metadata
         const transactionData = {
           organization_id: organization.id,
-          signature: 'simulated_signature_' + Date.now(),
+          signature: executeSignature,
           token_mint: tokenMint.toString(),
           proof_data: {
             encryption_keys: {
@@ -202,6 +499,7 @@ export function TransactionConfirmation({
             payment_hashes: {
               [invoice.number]: paymentHashes[invoice.number],
             },
+            file_hashes: fileHashes,
           },
           amount: invoice.amount,
           transaction_type: 'payment',
@@ -214,14 +512,36 @@ export function TransactionConfirmation({
             multisig_address: vendorDetails.multisigAddress,
             vault_address: vendorDetails.vaultAddress,
           },
-          invoices: [{ number: invoice.number, amount: invoice.amount }],
+          invoices: [
+            {
+              number: invoice.number,
+              amount: invoice.amount,
+              file_count: invoice.files?.length || 0,
+            },
+          ],
           status: 'confirmed',
           restricted_payment_methods: [],
-          metadata: {},
+          metadata: {
+            custom_fields: customFields,
+            payment_date: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
+            additional_info: vendorData.additionalInfo || '',
+          },
         };
 
-        // For a real implementation, store the transaction in your database
-        console.log('Transaction data to store:', transactionData);
+        // Store the transaction in the database
+        const storeResponse = await fetch('/api/transactions/store', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(transactionData),
+        });
+
+        if (!storeResponse.ok) {
+          throw new Error('Failed to store transaction record');
+        }
+
+        console.log('Transaction data stored successfully.');
       }
 
       // Set status to confirmed after processing all invoices
@@ -277,96 +597,58 @@ export function TransactionConfirmation({
                 <p className="font-medium text-sm mb-2">Invoices</p>
               </div>
               <div className="space-y-2">
-                {vendorData?.invoices.map(
-                  (
-                    invoice: {
-                      number:
-                        | string
-                        | number
-                        | bigint
-                        | boolean
-                        | ReactElement<unknown, string | JSXElementConstructor<any>>
-                        | Iterable<ReactNode>
-                        | ReactPortal
-                        | Promise<
-                            | string
-                            | number
-                            | bigint
-                            | boolean
-                            | ReactPortal
-                            | ReactElement<unknown, string | JSXElementConstructor<any>>
-                            | Iterable<ReactNode>
-                            | null
-                            | undefined
-                          >
-                        | null
-                        | undefined;
-                      amount:
-                        | string
-                        | number
-                        | bigint
-                        | boolean
-                        | ReactElement<unknown, string | JSXElementConstructor<any>>
-                        | Iterable<ReactNode>
-                        | ReactPortal
-                        | Promise<
-                            | string
-                            | number
-                            | bigint
-                            | boolean
-                            | ReactPortal
-                            | ReactElement<unknown, string | JSXElementConstructor<any>>
-                            | Iterable<ReactNode>
-                            | null
-                            | undefined
-                          >
-                        | null
-                        | undefined;
-                    },
-                    index: Key | null | undefined,
-                  ) => (
-                    <Card key={index} className="bg-muted/50 rounded-md">
-                      <CardContent className="flex w-full justify-between items-center h-full m-0 px-4 py-2 text-xs">
+                {vendorData?.invoices.map((invoice: Invoice, index: number) => (
+                  <Card key={index} className="bg-muted/50 rounded-md">
+                    <CardContent className="flex w-full justify-between items-center h-full m-0 px-4 py-2 text-xs">
+                      <div className="flex items-center">
                         <p>#{invoice.number}</p>
-                        <p>
-                          {invoice.amount} {paymentData.tokenType}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ),
-                )}
+                        {invoice.files && invoice.files.length > 0 && (
+                          <span className="ml-2 text-xs text-blue-500">
+                            ({invoice.files.length} file{invoice.files.length !== 1 ? 's' : ''})
+                          </span>
+                        )}
+                      </div>
+                      <p>
+                        {invoice.amount} {paymentData.tokenType}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
 
-            {/* Dynamic Fields */}
-            {Object.entries(vendorData || {})
-              .filter(([key, value]) => {
-                return !(
-                  key === 'vendor' ||
-                  key === 'invoices' ||
-                  key === 'sender' ||
-                  key === 'receiver' ||
-                  key === 'amount' ||
-                  key === 'tokenType' ||
-                  key === 'receiverDetails' ||
-                  key === 'totalAmount' ||
-                  typeof value === 'object' ||
-                  !value
-                );
-              })
-              .map(([key, value]) => {
-                const formattedKey = key
-                  .replace(/([A-Z])/g, ' $1')
-                  .replace(/_/g, ' ')
-                  .replace(/^./, (str) => str.toUpperCase());
+            {/* Dynamic Custom Fields Display */}
+            {Object.entries(extractCustomFields(vendorData)).map(([key, value]) => {
+              const formattedKey = key
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/_/g, ' ')
+                .replace(/^./, (str) => str.toUpperCase());
 
-                return (
-                  <div key={key}>
-                    <p className="font-medium text-xs mb-2">{formattedKey}</p>
-                    <p className="text-xs text-muted-foreground">{String(value)}</p>
-                  </div>
-                );
-              })}
+              return (
+                <div key={key}>
+                  <p className="font-medium text-xs mb-2">{formattedKey}</p>
+                  <p className="text-xs text-muted-foreground">{String(value)}</p>
+                </div>
+              );
+            })}
+
+            {/* Payment Date */}
+            {vendorData.paymentDate && (
+              <div>
+                <p className="font-medium text-xs mb-2">Payment Date</p>
+                <p className="text-xs text-muted-foreground">
+                  {vendorData.paymentDate.toLocaleDateString()}
+                </p>
+              </div>
+            )}
+
+            {/* Additional Info */}
+            {vendorData.additionalInfo && (
+              <div>
+                <p className="font-medium text-xs mb-2">Additional Notes</p>
+                <p className="text-xs text-muted-foreground">{vendorData.additionalInfo}</p>
+              </div>
+            )}
           </div>
         </div>
 

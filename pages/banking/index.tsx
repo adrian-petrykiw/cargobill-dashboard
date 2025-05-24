@@ -1,5 +1,5 @@
 // pages/banking/index.tsx
-
+import { useState } from 'react';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,51 +11,102 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Copy } from 'lucide-react';
+import { Copy, Plus, RefreshCw } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import type { BankingTransfer } from '@/schemas/banking.schema';
+import { useFBODetails, useFBOTransfers } from '@/features/banking/hooks/useBanking';
 
 export default function Banking() {
+  const {
+    accountDetails,
+    isLoading: isLoadingAccount,
+    error: accountError,
+    refetch: refetchAccount,
+  } = useFBODetails();
+  const {
+    transfers,
+    isLoading: isLoadingTransfers,
+    error: transfersError,
+    refetch: refetchTransfers,
+  } = useFBOTransfers();
+
+  const handleCopyToClipboard = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${type} copied to clipboard`);
+    } catch (error) {
+      toast.error(`Failed to copy ${type}`);
+    }
+  };
+
+  const formatAmount = (amount: string): string => {
+    const num = parseFloat(amount);
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(num);
+  };
+
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusColors = {
+      COMPLETED: 'bg-green-100 text-green-800',
+      PENDING: 'bg-yellow-100 text-yellow-800',
+      FAILED: 'bg-red-100 text-red-800',
+      PROCESSING: 'bg-blue-100 text-blue-800',
+      CANCELLED: 'bg-gray-100 text-gray-800',
+    } as const;
+
+    return (
+      <span
+        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+          statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'
+        }`}
+      >
+        {status}
+      </span>
+    );
+  };
+
+  const maskAccountNumber = (accountNumber: string): string => {
+    if (accountNumber.length <= 4) return accountNumber;
+    return '••••••••' + accountNumber.slice(-4);
+  };
+
+  const maskRoutingNumber = (routingNumber: string): string => {
+    if (routingNumber.length <= 4) return routingNumber;
+    return '•••••' + routingNumber.slice(-4);
+  };
+
+  // const handleRefresh = (): void => {
+  //   refetchAccount();
+  //   refetchTransfers();
+  //   toast.success('Data refreshed');
+  // };
+
   return (
     <ProtectedLayout title="Banking · CargoBill">
       <div className="space-y-6">
-        <h1 className="text-xl font-semibold">Banking</h1>
-
-        {/* Account Overview Section */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Bank Account Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-md font-medium">Bank Account</CardTitle>
-              <Button variant="link" className="text-xs p-0 h-auto">
-                Details
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-16">
-                <p className="text-gray-500 mb-4 text-sm">Feature coming soon :)</p>
-                <p className="text-gray-400 text-xs">
-                  Banking features will enable you to manage your USD accounts and transactions
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Transfers Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-md font-medium">Transfers</CardTitle>
-              <Button size="sm" className="h-8">
-                New Transfer +
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-16">
-                <p className="text-gray-500 mb-4 text-sm">No recent transfers</p>
-                <p className="text-gray-400 text-xs">
-                  Your recent ACH and wire transfers will appear here
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Header with New Transfer button */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Banking</h1>
+          <div className="flex items-center gap-2">
+            {/* <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button> */}
+            <Button className="h-8">
+              <Plus className="h-4 w-4 mr-2" />
+              New Transfer
+            </Button>
+          </div>
         </div>
 
         {/* Account Details Section */}
@@ -65,38 +116,94 @@ export default function Banking() {
           </div>
 
           <Card>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Account Number</h3>
-                  <div className="flex items-center">
-                    <p className="font-mono text-sm">••••••••9876</p>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-2">
-                      <Copy className="h-4 w-4" />
-                    </Button>
+            <CardContent className="pt-6">
+              {isLoadingAccount ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                  <p className="text-gray-500 text-sm">Loading account details...</p>
+                </div>
+              ) : accountError ? (
+                <div className="text-center py-8">
+                  <p className="text-red-500 text-sm mb-4">
+                    Error loading account details: {(accountError as Error).message}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => refetchAccount()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : accountDetails ? (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Number</h3>
+                    <div className="flex items-center">
+                      <p className="font-mono text-sm">
+                        {maskAccountNumber(accountDetails.account_num)}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 ml-2"
+                        onClick={() =>
+                          handleCopyToClipboard(accountDetails.account_num, 'Account number')
+                        }
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Routing Number</h3>
-                  <div className="flex items-center">
-                    <p className="font-mono text-sm">••••••1234</p>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-2">
-                      <Copy className="h-4 w-4" />
-                    </Button>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Routing Number</h3>
+                    <div className="flex items-center">
+                      <p className="font-mono text-sm">
+                        {maskRoutingNumber(accountDetails.routing_num)}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 ml-2"
+                        onClick={() =>
+                          handleCopyToClipboard(accountDetails.routing_num, 'Routing number')
+                        }
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Account Type</h3>
-                  <p className="text-sm">Business Checking</p>
-                </div>
+                  {/* <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account ID</h3>
+                    <p className="text-sm font-mono text-gray-600">{accountDetails.account_id}</p>
+                  </div> */}
 
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Bank Name</h3>
-                  <p className="text-sm">Wells Fargo</p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Status</h3>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        accountDetails.account_status === 'ACTIVE'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {accountDetails.account_status}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Type</h3>
+                    <p className="text-sm">{accountDetails.account_type}</p>
+                  </div>
+
+                  {/* <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Name</h3>
+                    <p className="text-sm">{accountDetails.account_name}</p>
+                  </div> */}
                 </div>
-              </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No account details available</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -122,7 +229,7 @@ export default function Banking() {
                       Type
                     </TableHead>
                     <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
-                      To/From
+                      Method
                     </TableHead>
                     <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
                       Description
@@ -130,17 +237,74 @@ export default function Banking() {
                     <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
                       Status
                     </TableHead>
-                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6">
+                    <TableHead className="text-xs uppercase text-gray-500 py-3 px-6 text-right">
                       Amount
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-200">
-                  <TableRow>
-                    <TableCell className="text-center text-xs text-gray-500 py-4 px-6" colSpan={6}>
-                      No transfers found
-                    </TableCell>
-                  </TableRow>
+                  {isLoadingTransfers ? (
+                    <TableRow>
+                      <TableCell className="text-center py-8 px-6" colSpan={6}>
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mr-3"></div>
+                          <span className="text-xs text-gray-500">Loading transfers...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : transfersError ? (
+                    <TableRow>
+                      <TableCell className="text-center py-8 px-6" colSpan={6}>
+                        <p className="text-xs text-red-500 mb-2">
+                          Error loading transfers: {(transfersError as Error).message}
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => refetchTransfers()}>
+                          Retry
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ) : transfers && transfers.values.length > 0 ? (
+                    transfers.values.map((transfer: BankingTransfer) => (
+                      <TableRow key={transfer.transfer_id} className="hover:bg-gray-50">
+                        <TableCell className="text-xs py-4 px-6">
+                          {formatDate(transfer.transfer_date)}
+                        </TableCell>
+                        <TableCell className="text-xs py-4 px-6">
+                          <span className="capitalize">{transfer.transfer_type.toLowerCase()}</span>
+                        </TableCell>
+                        <TableCell className="text-xs py-4 px-6">
+                          <span className="capitalize">
+                            {transfer.transfer_method.toLowerCase()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs py-4 px-6 max-w-xs truncate">
+                          {transfer.transfer_name || transfer.purpose || 'No description'}
+                        </TableCell>
+                        <TableCell className="text-xs py-4 px-6">
+                          {getStatusBadge(transfer.transfer_status)}
+                        </TableCell>
+                        <TableCell className="text-xs py-4 px-6 text-right font-mono">
+                          <span
+                            className={`${
+                              transfer.transfer_type === 'DEBIT' ? 'text-red-600' : 'text-green-600'
+                            }`}
+                          >
+                            {transfer.transfer_type === 'DEBIT' ? '-' : '+'}
+                            {formatAmount(transfer.transfer_amount)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        className="text-center text-xs text-gray-500 py-8 px-6"
+                        colSpan={6}
+                      >
+                        No transfers found
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>

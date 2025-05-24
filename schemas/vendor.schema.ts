@@ -2,12 +2,15 @@
 import { z } from 'zod';
 import { TokenType } from '@/types/token';
 
+// Define the invoice schema with Zod for validation
 export const invoiceSchema = z.object({
   number: z.string().min(1, 'Invoice number is required'),
   amount: z.number().positive('Amount must be positive'),
+  files: z.array(z.instanceof(File)).optional(),
 });
 
-export type InvoiceData = z.infer<typeof invoiceSchema>;
+// Use this single type definition derived from the schema
+export type Invoice = z.infer<typeof invoiceSchema>;
 
 export const createVendorFormSchema = (
   customFields: Array<{
@@ -22,8 +25,8 @@ export const createVendorFormSchema = (
     vendor: z.string().min(1, 'Vendor is required'),
     invoices: z.array(invoiceSchema).min(1, 'At least one invoice is required'),
     tokenType: z.enum(['USDC', 'USDT', 'EURC']).default('USDC'),
+    paymentDate: z.date().default(() => new Date()),
     additionalInfo: z.string().optional(),
-    relatedBolAwb: z.string().optional(),
   });
 
   if (!customFields || customFields.length === 0) {
