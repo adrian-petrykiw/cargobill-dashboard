@@ -5,8 +5,6 @@ import {
   updateOrganizationSchema,
   type Organization,
 } from '@/schemas/organization.schema';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '@/types/db/supabase';
 
 export const organizationRepository = {
   async isUserInAnyOrganization(userId: string): Promise<boolean> {

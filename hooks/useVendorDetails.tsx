@@ -33,12 +33,13 @@ export function useVendorDetails(vendorId: string | null) {
 
         const vendorDetails = result.data as VendorDetails;
 
-        if (!vendorDetails.multisigAddress) {
-          throw new Error('Vendor has no valid multisig address');
+        // Extract multisig address from operational_wallet.address instead of direct access
+        if (!vendorDetails.operational_wallet?.address) {
+          throw new Error('Vendor has no valid operational wallet multisig address');
         }
 
         // Derive vault address from multisig address using Squads protocol
-        const multisigPda = new PublicKey(vendorDetails.multisigAddress);
+        const multisigPda = new PublicKey(vendorDetails.operational_wallet.address);
         const [vaultPda] = getVaultPda({
           multisigPda,
           index: 0,
@@ -62,7 +63,6 @@ export function useVendorDetails(vendorId: string | null) {
           tokenAtas[token] = ata.toBase58();
         }
 
-        // Return extended vendor details with derived addresses
         return {
           ...vendorDetails,
           vaultAddress: vaultPda.toBase58(),
