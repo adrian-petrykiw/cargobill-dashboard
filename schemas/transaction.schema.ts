@@ -20,8 +20,8 @@ export const transactionSchema = z.object({
   memo: z.string().nullable().optional(),
   metadata: jsonSchema.nullable().optional(),
   proof_data: jsonSchema,
-  recipient_organization_id: z.string().nullable().optional(),
-  sender_organization_id: z.string().nullable().optional(),
+  recipient_organization_id: z.string().uuid().nullable().optional(),
+  sender_organization_id: z.string().uuid().nullable().optional(),
   signature: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
   updated_by: z.string().nullable().optional(),
@@ -35,12 +35,16 @@ export const createTransactionSchema = transactionSchema
     completed_at: true,
     updated_at: true,
     updated_by: true,
+    created_at: true,
   })
   .extend({
     created_at: z.string().optional(),
     status: z
-      .enum(['pending', 'scheduled', 'processing', 'completed', 'failed', 'cancelled'])
+      .enum(['pending', 'scheduled', 'processing', 'confirmed', 'completed', 'failed', 'cancelled'])
       .default('pending'),
+    transaction_type: z.enum(['payment', 'transfer', 'request', 'other']),
+    // Make sender_organization_id required for create operations
+    sender_organization_id: z.string().uuid(),
   });
 
 export type CreateTransactionRequest = z.infer<typeof createTransactionSchema>;
@@ -54,3 +58,16 @@ export const updateTransactionSchema = transactionSchema
   .required({ id: true });
 
 export type UpdateTransactionRequest = z.infer<typeof updateTransactionSchema>;
+
+// Schema for validating proof data structure
+export const proofDataSchema = z.object({
+  encryption_keys: z.record(z.string()),
+  memo_hashes: z.record(z.string()),
+  file_hashes: z.record(z.array(z.string())).optional(),
+  comprehensive_encrypted_data: z.record(z.string()).optional(),
+  essential_data_used: z.record(z.any()).optional(),
+  // Legacy support for older transaction formats
+  payment_hashes: z.record(z.string()).optional(),
+});
+
+export type ProofData = z.infer<typeof proofDataSchema>;

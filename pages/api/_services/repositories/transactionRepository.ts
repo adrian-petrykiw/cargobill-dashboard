@@ -5,8 +5,6 @@ import {
   updateTransactionSchema,
   type Transaction,
 } from '@/schemas/transaction.schema';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '@/types/db/supabase';
 
 export const transactionRepository = {
   async getByIdSystem(id: string): Promise<Transaction> {

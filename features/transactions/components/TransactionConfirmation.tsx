@@ -34,6 +34,7 @@ import {
   transactionMessageToVaultMessage,
   vaultTransactionExecuteSync,
 } from '@/lib/helpers/squadsUtils';
+import { transactionApi } from '@/services/api/transactionApi';
 
 // Clean interface for Invoice type
 interface Invoice {
@@ -213,6 +214,17 @@ export function TransactionConfirmation({
       if (!vendorApiData.multisigAddress) {
         throw new Error('Vendor has no valid multisig address');
       }
+
+      // Extract recipient organization ID from vendor data for proper transaction storage
+      const recipientOrganizationId = vendorApiData.organizationId || vendorApiData.organization_id;
+      const recipientName =
+        vendorApiData.name || vendorApiData.organization_name || 'Unknown Vendor';
+
+      console.log('Vendor organization details:', {
+        organizationId: recipientOrganizationId,
+        name: recipientName,
+        multisigAddress: vendorApiData.multisigAddress,
+      });
 
       const receiverMultisigPda = new PublicKey(vendorApiData.multisigAddress);
       const [receiverVaultPda] = getVaultPda({
@@ -582,7 +594,7 @@ export function TransactionConfirmation({
             },
           },
           amount: invoice.amount,
-          transaction_type: 'payment',
+          transaction_type: 'payment' as const,
           sender: {
             multisig_address: multisigAddress.toString(),
             vault_address: vaultPda.toString(),
@@ -615,22 +627,22 @@ export function TransactionConfirmation({
               comprehensive_fields_count: Object.keys(comprehensiveInvoiceData).length,
             },
           },
+          // Include recipient organization information for proper database storage
+          recipient_organization_id: recipientOrganizationId,
+          recipient_name: recipientName,
         };
 
-        // Store the transaction in the database
-        const storeResponse = await fetch('/api/transactions/store', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(transactionData),
+        // Store the transaction using the transaction API service
+        console.log('Storing transaction with recipient organization mapping:', {
+          senderOrgId: organization.id,
+          recipientOrgId: recipientOrganizationId,
+          signature: executeSignature,
+          amount: invoice.amount,
         });
 
-        if (!storeResponse.ok) {
-          throw new Error('Failed to store transaction record');
-        }
+        await transactionApi.storeTransaction(transactionData);
 
-        console.log('Transaction stored with consistent essential data structure approach.');
+        console.log('Transaction stored successfully with essential data structure approach.');
       }
 
       // Set status to confirmed after processing all invoices
