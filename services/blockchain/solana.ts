@@ -371,6 +371,11 @@ export class SolanaService {
     const modifiedTx = new Transaction();
     modifiedTx.feePayer = feePayer;
 
+    // CRITICAL FIX: Copy the recentBlockhash from the original transaction
+    if (transaction.recentBlockhash) {
+      modifiedTx.recentBlockhash = transaction.recentBlockhash;
+    }
+
     // Add compute budget instructions
     modifiedTx.add(
       ComputeBudgetProgram.setComputeUnitPrice({

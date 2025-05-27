@@ -193,19 +193,32 @@ export function TransactionConfirmation({
       );
       console.log('Vault ATA:', vaultAta.toString());
 
-      // Fetch vendor details from API
       setStatus('creating');
-      const vendorApiResponse = await fetch(`/api/vendors/${vendorData.vendor}/details`);
+      const vendorApiResponse = await fetch(`/api/vendors/${vendorData.vendor}`);
       if (!vendorApiResponse.ok) {
         throw new Error('Failed to fetch vendor payment details');
       }
 
-      const vendorDetails = await vendorApiResponse.json();
-      if (!vendorDetails.vaultAddress) {
-        throw new Error('Vendor has no payment address');
+      const vendorApiResult = await vendorApiResponse.json();
+      if (!vendorApiResult.success || !vendorApiResult.data) {
+        throw new Error(vendorApiResult.error?.message || 'Failed to fetch vendor details');
       }
 
-      const receiverVaultPda = new PublicKey(vendorDetails.vaultAddress);
+      const vendorApiData = vendorApiResult.data;
+
+      if (!vendorApiData.multisigAddress) {
+        throw new Error('Vendor has no valid multisig address');
+      }
+
+      const receiverMultisigPda = new PublicKey(vendorApiData.multisigAddress);
+      const [receiverVaultPda] = getVaultPda({
+        multisigPda: receiverMultisigPda,
+        index: 0,
+      });
+
+      console.log('Receiver multisig:', receiverMultisigPda.toString());
+      console.log('Receiver vault PDA:', receiverVaultPda.toString());
+
       const receiverAta = await getAssociatedTokenAddress(
         tokenMint,
         receiverVaultPda,
@@ -239,8 +252,8 @@ export function TransactionConfirmation({
           },
           vendor: vendorData.vendor,
           paymentMethod: paymentData.paymentMethod,
-          tokenType: paymentData.tokenType,
-          paymentDate: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
+          // tokenType: paymentData.tokenType,
+          // paymentDate: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
           timestamp: Date.now(),
           additionalInfo: vendorData.additionalInfo || '',
           customFields: customFields,
@@ -269,7 +282,7 @@ export function TransactionConfirmation({
           h: paymentHashes[invoice.number],
           v: '1.0',
           i: invoice.number,
-          fh: fileHashes[invoice.number] || [],
+          // fh: fileHashes[invoice.number] || [],
         };
 
         // Use Solana memo program
@@ -298,24 +311,13 @@ export function TransactionConfirmation({
           vaultPda: vaultPda,
         });
 
-        // Get transaction PDA and accounts for execution
+        // Get transaction PDA for all operations
         const [transactionPda] = getTransactionPda({
           multisigPda: multisigAddress,
           index: newTransactionIndex,
         });
 
-        console.log('Getting execution accounts...');
-        const { accountMetas } = await getAccountsForExecuteCore({
-          connection: connection,
-          multisigPda: multisigAddress,
-          message: compiledMessage,
-          ephemeralSignerBumps: [0],
-          vaultIndex: 0,
-          transactionPda,
-          programId: PROGRAM_ID,
-        });
-
-        // Build instructions
+        // Build the create, propose, and approve instructions (these will be executed first)
         console.log('Creating transaction instructions...');
         const createIx = instructions.vaultTransactionCreate({
           multisigPda: multisigAddress,
@@ -339,14 +341,6 @@ export function TransactionConfirmation({
           member: new PublicKey(wallet.address),
         });
 
-        const { instruction: executeIx } = vaultTransactionExecuteSync({
-          multisigPda: multisigAddress,
-          transactionIndex: newTransactionIndex,
-          member: new PublicKey(wallet.address),
-          accountsForExecute: accountMetas,
-          programId: PROGRAM_ID,
-        });
-
         // Setup transactions
         setStatus('confirming');
 
@@ -368,6 +362,9 @@ export function TransactionConfirmation({
 
         console.log('Signing create transaction...');
         const signedCreateTx = await wallet.signTransaction(createTxWithFee);
+
+        const createBase64Transaction = signedCreateTx.serialize().toString('base64');
+        console.log('Signed CREATE transaction (base64):', createBase64Transaction);
 
         console.log('Sending create transaction...');
         const createSignature = await connection.sendRawTransaction(signedCreateTx.serialize(), {
@@ -415,6 +412,9 @@ export function TransactionConfirmation({
         console.log('Signing propose+approve transaction...');
         const signedProposeTx = await wallet.signTransaction(proposeTxWithFee);
 
+        const proposeBase64Transaction = signedProposeTx.serialize().toString('base64');
+        console.log('Signed PROPOSE + APPROVE transaction (base64):', proposeBase64Transaction);
+
         console.log('Sending propose+approve transaction...');
         const proposeSignature = await connection.sendRawTransaction(signedProposeTx.serialize(), {
           skipPreflight: true,
@@ -442,6 +442,40 @@ export function TransactionConfirmation({
         console.log('Propose+approve transaction confirmed. Waiting before execution...');
         await new Promise((resolve) => setTimeout(resolve, 5000));
 
+        console.log('Recomputing execution accounts with fresh state...');
+        // Create a fresh transfer message with current blockhash for execution
+        const executionTransferMessage = new TransactionMessage({
+          payerKey: vaultPda,
+          recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
+          instructions: [transferIx, memoIx],
+        });
+
+        const executionCompiledMessage = transactionMessageToVaultMessage({
+          message: executionTransferMessage,
+          addressLookupTableAccounts: [],
+          vaultPda: vaultPda,
+        });
+
+        // Get fresh execution accounts
+        const { accountMetas: freshAccountMetas } = await getAccountsForExecuteCore({
+          connection: connection,
+          multisigPda: multisigAddress,
+          message: executionCompiledMessage,
+          ephemeralSignerBumps: [0],
+          vaultIndex: 0,
+          transactionPda,
+          programId: PROGRAM_ID,
+        });
+
+        // Create execute instruction with fresh account metas
+        const { instruction: executeIx } = vaultTransactionExecuteSync({
+          multisigPda: multisigAddress,
+          transactionIndex: newTransactionIndex,
+          member: new PublicKey(wallet.address),
+          accountsForExecute: freshAccountMetas,
+          programId: PROGRAM_ID,
+        });
+
         // Create the execution transaction
         const executeTx = new Transaction();
         executeTx.feePayer = new PublicKey(wallet.address);
@@ -460,6 +494,9 @@ export function TransactionConfirmation({
 
         console.log('Signing execute transaction...');
         const signedExecuteTx = await wallet.signTransaction(executeTxWithFee);
+
+        const executeBase64Transaction = signedExecuteTx.serialize().toString('base64');
+        console.log('Signed EXECUTE transaction (base64):', executeBase64Transaction);
 
         console.log('Sending execute transaction...');
         const executeSignature = await connection.sendRawTransaction(signedExecuteTx.serialize(), {
@@ -509,8 +546,8 @@ export function TransactionConfirmation({
             wallet_address: wallet.address,
           },
           recipient: {
-            multisig_address: vendorDetails.multisigAddress,
-            vault_address: vendorDetails.vaultAddress,
+            multisig_address: receiverMultisigPda.toString(),
+            vault_address: receiverVaultPda.toString(),
           },
           invoices: [
             {
@@ -561,14 +598,14 @@ export function TransactionConfirmation({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 space-y-6">
-        <div className="space-y-4 pb-4">
+      <div className="flex-1 space-y-4">
+        <div className="space-y-4 pb-0">
           <h2 className="text-lg font-semibold">Vendor & Invoice Details</h2>
           <div className="grid grid-cols-2 gap-4">
             {/* Vendor Card */}
             <div className="flex flex-col">
               <p className="font-medium text-sm pb-2">Vendor</p>
-              <Card className="bg-muted/50 rounded-md">
+              <Card className="bg-muted/50 rounded-md p-0">
                 <CardContent className="p-4">
                   {!vendorData?.receiverDetails ? (
                     <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
@@ -577,13 +614,13 @@ export function TransactionConfirmation({
                   ) : (
                     <div className="p-0 m-0">
                       <h4 className="font-semibold text-sm">
-                        {vendorData.receiverDetails?.business_details?.companyName}
+                        {vendorData.receiverDetails?.name || 'Unknown Vendor'}
                       </h4>
                       <p className="text-xs text-muted-foreground">
-                        {vendorData.receiverDetails?.business_details?.companyAddress}
+                        Address: {vendorData.receiverDetails?.primary_address || 'NA'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {vendorData.receiverDetails?.business_details?.companyPhone}
+                        Phone: {vendorData.receiverDetails?.business_details?.phone || 'NA'}
                       </p>
                     </div>
                   )}
@@ -719,11 +756,11 @@ export function TransactionConfirmation({
           </div>
         </div>
 
-        <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-800">
+        <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-800 border-blue-100 border-[1px]">
           <p>
             By confirming this transaction, you authorize the transfer of{' '}
             {vendorData.totalAmount?.toFixed(2)} {paymentData.tokenType} from your business wallet
-            to {vendorData.receiverDetails?.business_details?.companyName || 'the vendor'}.
+            to {vendorData.receiverDetails?.name || 'the vendor'}.
           </p>
         </div>
       </div>
@@ -732,7 +769,7 @@ export function TransactionConfirmation({
         <div className="flex gap-4">
           <Button
             onClick={onBack}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700"
+            className="flex-1 bg-slate-300 hover:bg-slate-300 text-gray-700"
             variant="secondary"
             disabled={isProcessing}
           >

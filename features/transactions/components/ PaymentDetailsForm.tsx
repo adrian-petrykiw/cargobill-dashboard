@@ -93,8 +93,8 @@ export function PaymentDetailsForm({
     <Form {...form}>
       <div className="flex flex-col h-full">
         <div className="flex-1 overflow-y-auto pb-24">
-          <form id="payment-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <Card className="bg-muted/50 rounded-lg mb-4 border-t">
+          <form id="payment-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+            <Card className="bg-white rounded-lg mb-4 py-0 border-t">
               <CardContent className="p-4 flex w-full h-full items-center justify-between">
                 <h2 className="font-medium text-md">Total Payment Amount</h2>
                 <p className="text-lg font-bold">
@@ -118,7 +118,7 @@ export function PaymentDetailsForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="account_credit">Available Credit</SelectItem>
+                        <SelectItem value="account_credit">Business Wallet</SelectItem>
                         <SelectItem value="ach">ACH Transfer</SelectItem>
                         <SelectItem value="wire">Wire Transfer</SelectItem>
                         <SelectItem value="credit_card">Credit Card</SelectItem>
@@ -132,7 +132,7 @@ export function PaymentDetailsForm({
             </div>
 
             {selectedMethod === 'account_credit' && (
-              <div className="pt-2">
+              <div className="pt-0 flex justify-end">
                 <div className="text-sm text-muted-foreground">
                   Available {tokenType} balance:{' '}
                   {isLoadingBalance ? (
@@ -392,7 +392,7 @@ export function PaymentDetailsForm({
             <Button
               type="button"
               onClick={onBack}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700"
+              className="flex-1 bg-slate-300 hover:bg-slate-300 text-gray-700"
               variant="secondary"
             >
               Back
