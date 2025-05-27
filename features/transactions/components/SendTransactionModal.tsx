@@ -10,8 +10,8 @@ import { useOrganizations } from '@/hooks/useOrganizations';
 import { VendorSelectionForm } from './VendorSelectionForm';
 import { TransactionConfirmation } from './TransactionConfirmation';
 import { EnrichedVendorFormValues, PaymentDetailsFormValues } from '@/schemas/vendor.schema';
-import { PaymentDetailsForm } from './ PaymentDetailsForm';
 import { useVendorSelection } from '@/hooks/useVendorSelection';
+import { PaymentDetailsForm } from './ PaymentDetailsForm';
 
 interface SendTransactionModalProps {
   isOpen: boolean;
@@ -53,17 +53,36 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
     setPaymentFormData(null);
   };
 
-  const handleTransactionComplete = async () => {
-    // Invalidate and refetch balance queries
-    await queryClient.invalidateQueries({
-      queryKey: ['tokenBalances'],
-    });
-    await queryClient.invalidateQueries({
-      queryKey: ['transactions'],
-    });
+  const handleTransactionComplete = async (): Promise<void> => {
+    try {
+      // Invalidate and refetch balance queries
+      await queryClient.invalidateQueries({
+        queryKey: ['tokenBalances'],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['transactions'],
+      });
 
-    // Reset modal state and close
-    handleClose();
+      // Invalidate organization-specific transaction queries if we have an organization
+      if (organization?.id) {
+        await queryClient.invalidateQueries({
+          queryKey: ['transactions', 'organization', organization.id],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ['transactions', 'sent', organization.id],
+        });
+      }
+
+      // Force a small delay to ensure all queries are properly invalidated
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Reset modal state and close
+      handleClose();
+    } catch (error) {
+      console.error('Error completing transaction cleanup:', error);
+      // Still close the modal even if there's an error with cache invalidation
+      handleClose();
+    }
   };
 
   const handleVendorSubmit = (data: EnrichedVendorFormValues) => {
@@ -139,7 +158,7 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
       }}
     >
       <DialogContent
-        className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col "
+        className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col"
         onPointerDownOutside={(e) => {
           e.preventDefault();
         }}
@@ -152,7 +171,7 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
             <DialogTitle className="text-xl">Send Payment</DialogTitle>
           </DialogHeader>
 
-          <div className="flex space-x-4 justify-between w-full mt-4 ">
+          <div className="flex space-x-4 justify-between w-full mt-4">
             {steps.map((stepItem, index) => (
               <div
                 key={index}

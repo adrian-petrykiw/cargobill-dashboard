@@ -5,12 +5,13 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 interface TransactionStatusProps {
-  onDone: () => void;
+  onDone: () => Promise<void>; // Changed to Promise to handle async operations
   currentStatus: 'encrypting' | 'creating' | 'confirming' | 'confirmed';
 }
 
 export function TransactionStatus({ onDone, currentStatus }: TransactionStatusProps) {
   const [showDone, setShowDone] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     if (currentStatus === 'confirmed') {
@@ -18,9 +19,16 @@ export function TransactionStatus({ onDone, currentStatus }: TransactionStatusPr
     }
   }, [currentStatus]);
 
-  const handleDone = () => {
-    setShowDone(false);
-    onDone();
+  const handleDone = async () => {
+    setIsCompleting(true);
+    try {
+      await onDone();
+      // The component will unmount after onDone completes, so we don't need to reset state
+    } catch (error) {
+      console.error('Error completing transaction cleanup:', error);
+      // Reset loading state if there's an error
+      setIsCompleting(false);
+    }
   };
 
   return (
@@ -46,16 +54,30 @@ export function TransactionStatus({ onDone, currentStatus }: TransactionStatusPr
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Check className="h-5 w-5 text-green-500" />
-                <span className="text-green-700 font-medium">Payment Confirmed!</span>
+                <span className="text-green-600 font-medium">Payment Completed</span>
               </div>
               <Button
                 onClick={handleDone}
                 variant="outline"
-                className="px-4 py-2 text-green-600 border-green-200 hover:bg-green-100"
+                disabled={isCompleting}
+                className="px-4 py-2 text-green-600 border-green-200 hover:bg-green-100 disabled:opacity-50"
               >
-                Done
+                {isCompleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-0 animate-spin" />
+                    {/* Finalizing */}
+                  </>
+                ) : (
+                  'Done'
+                )}
               </Button>
             </div>
+            {/* {isCompleting ||
+              (true && (
+                <div className="mt-2 text-xs text-green-600">
+                  Updating records and refreshing data...
+                </div>
+              ))} */}
           </Card>
         )}
       </div>

@@ -44,7 +44,7 @@ interface Invoice {
 }
 
 interface TransactionConfirmationProps {
-  onClose: () => void;
+  onClose: () => Promise<void>; // Updated to return Promise
   onBack: () => void;
   vendorData: EnrichedVendorFormValues;
   paymentData: PaymentDetailsFormValues;
