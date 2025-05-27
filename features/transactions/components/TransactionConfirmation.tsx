@@ -118,12 +118,16 @@ export function TransactionConfirmation({
         });
       };
 
-      // Encrypt payment data for transaction memo
+      // Encrypt payment data for database storage
       const encryptPaymentData = (data: any) => {
         const key = randomBytes(32);
         const iv = randomBytes(16);
         const cipher = createCipheriv('aes-256-cbc', key, iv);
-        let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex');
+        let encrypted = cipher.update(
+          JSON.stringify(data, Object.keys(data).sort()),
+          'utf8',
+          'hex',
+        );
         encrypted += cipher.final('hex');
         return {
           encrypted: iv.toString('hex') + ':' + encrypted,
@@ -133,7 +137,7 @@ export function TransactionConfirmation({
 
       // Storage for encryption keys and hashes
       const encryptionKeys: Record<string, string> = {};
-      const paymentHashes: Record<string, string> = {};
+      const memoHashes: Record<string, string> = {};
       const fileHashes: Record<string, string[]> = {};
 
       // Get organization's multisig address
@@ -232,9 +236,9 @@ export function TransactionConfirmation({
       const customFields = extractCustomFields(vendorData);
       console.log('Custom fields extracted:', customFields);
 
-      // Process each invoice
+      // Process each invoice with consistent data structure approach
       for (const invoice of vendorData.invoices as Invoice[]) {
-        // Process and hash files if present
+        // Process and hash files if present (for memo and database storage)
         if (invoice.files && invoice.files.length > 0) {
           const hashPromises = invoice.files.map((file) => hashFile(file));
           fileHashes[invoice.number] = await Promise.all(hashPromises);
@@ -243,8 +247,18 @@ export function TransactionConfirmation({
           );
         }
 
-        // Create and encrypt invoice data - include custom fields dynamically
-        const invoiceData = {
+        // Create ESSENTIAL invoice data for memo with consistent structure
+        // Always include fileHashes field for data consistency, even if empty
+        const essentialInvoiceData = {
+          invoice: {
+            number: invoice.number,
+            amount: invoice.amount,
+            fileHashes: fileHashes[invoice.number] || [], // Always present for consistency
+          },
+        };
+
+        // Create comprehensive invoice data for database storage (complete audit trail)
+        const comprehensiveInvoiceData = {
           invoice: {
             number: invoice.number,
             amount: invoice.amount,
@@ -252,23 +266,36 @@ export function TransactionConfirmation({
           },
           vendor: vendorData.vendor,
           paymentMethod: paymentData.paymentMethod,
-          // tokenType: paymentData.tokenType,
-          // paymentDate: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
+          tokenType: paymentData.tokenType,
+          paymentDate: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
           timestamp: Date.now(),
           additionalInfo: vendorData.additionalInfo || '',
           customFields: customFields,
+          organizationId: organization.id,
+          walletAddress: wallet.address,
+          multisigAddress: multisigAddress.toString(),
+          receiverMultisigAddress: receiverMultisigPda.toString(),
         };
 
-        const { encrypted: encryptedData, key: encryptionKey } = encryptPaymentData(invoiceData);
-        encryptionKeys[invoice.number] = encryptionKey;
-        paymentHashes[invoice.number] = createHash('sha256')
-          .update(JSON.stringify(invoiceData))
+        // Create deterministic hash for memo (fixed-length SHA256)
+        // Sort keys to ensure consistent hashing regardless of object property order
+        const memoDataHash = createHash('sha256')
+          .update(JSON.stringify(essentialInvoiceData, Object.keys(essentialInvoiceData).sort()))
           .digest('hex');
 
-        // Create transaction instructions
-        const transferAmount = Math.round(invoice.amount * 1e6); // Convert to micro-units for USDC
+        // Store the memo hash for reference
+        memoHashes[invoice.number] = memoDataHash;
 
-        // Create transfer instruction
+        // Encrypt comprehensive data for database storage
+        const { encrypted: dbEncryptedData, key: dbEncryptionKey } =
+          encryptPaymentData(comprehensiveInvoiceData);
+
+        // Store database encryption key
+        encryptionKeys[invoice.number] = dbEncryptionKey;
+
+        // Create transaction instructions
+        const transferAmount = Math.round(invoice.amount * 1e6);
+
         const transferIx = createTransferInstruction(
           vaultAta,
           receiverAta,
@@ -276,20 +303,30 @@ export function TransactionConfirmation({
           BigInt(transferAmount),
         );
 
-        // Create memo instruction with encrypted data
+        // Create FIXED-LENGTH memo instruction (consistent size every time)
+        // This structure produces predictable SHA256 hash lengths and minimal memo size
         const memoData = {
-          d: encryptedData,
-          h: paymentHashes[invoice.number],
-          v: '1.0',
-          i: invoice.number,
-          // fh: fileHashes[invoice.number] || [],
+          h: memoDataHash, // Always exactly 64 hex characters (SHA256 output)
+          v: '1.0', // Always exactly 5 characters (version identifier)
+          i: invoice.number, // Invoice number (business identifier)
         };
 
-        // Use Solana memo program
+        // Calculate and log exact memo size for verification and monitoring
+        const memoString = JSON.stringify(memoData);
+        console.log('Essential memo data structure:', memoString);
+        console.log('Memo data size (characters):', memoString.length);
+        console.log('Hash length verification (should be 64):', memoDataHash.length);
+        console.log('Essential data used for hash generation:', essentialInvoiceData);
+        console.log('FileHashes field consistency check:', {
+          hasFiles: invoice.files?.length || 0,
+          hashArrayLength: fileHashes[invoice.number]?.length || 0,
+          alwaysPresent: 'fileHashes' in essentialInvoiceData.invoice,
+        });
+
         const memoIx = {
           keys: [],
           programId: new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'),
-          data: Buffer.from(JSON.stringify(memoData)),
+          data: Buffer.from(memoString),
         };
 
         // Get next transaction index
@@ -317,7 +354,7 @@ export function TransactionConfirmation({
           index: newTransactionIndex,
         });
 
-        // Build the create, propose, and approve instructions (these will be executed first)
+        // Build the create, propose, and approve instructions
         console.log('Creating transaction instructions...');
         const createIx = instructions.vaultTransactionCreate({
           multisigPda: multisigAddress,
@@ -485,7 +522,7 @@ export function TransactionConfirmation({
         const executeBlockhash = await connection.getLatestBlockhash('confirmed');
         executeTx.recentBlockhash = executeBlockhash.blockhash;
 
-        // Add priority fee
+        // Add priority fee with standard compute units (should be sufficient with minimal memo)
         const executeTxWithFee = await solanaService.addPriorityFee(
           executeTx,
           new PublicKey(wallet.address),
@@ -524,7 +561,7 @@ export function TransactionConfirmation({
 
         console.log('Execute transaction confirmed.');
 
-        // Store transaction data - include custom fields in metadata
+        // Store comprehensive transaction data in database
         const transactionData = {
           organization_id: organization.id,
           signature: executeSignature,
@@ -533,10 +570,16 @@ export function TransactionConfirmation({
             encryption_keys: {
               [invoice.number]: encryptionKeys[invoice.number],
             },
-            payment_hashes: {
-              [invoice.number]: paymentHashes[invoice.number],
+            memo_hashes: {
+              [invoice.number]: memoHashes[invoice.number],
             },
             file_hashes: fileHashes,
+            comprehensive_encrypted_data: {
+              [invoice.number]: dbEncryptedData,
+            },
+            essential_data_used: {
+              [invoice.number]: essentialInvoiceData,
+            },
           },
           amount: invoice.amount,
           transaction_type: 'payment',
@@ -562,6 +605,15 @@ export function TransactionConfirmation({
             custom_fields: customFields,
             payment_date: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
             additional_info: vendorData.additionalInfo || '',
+            files_processed: fileHashes[invoice.number]?.length || 0,
+            memo_approach: 'essential_sha256_hash_consistent_structure',
+            memo_data_size: memoString.length,
+            memo_hash_length: memoDataHash.length,
+            data_structure_consistency: {
+              fileHashes_always_present: true,
+              essential_fields_count: Object.keys(essentialInvoiceData.invoice).length,
+              comprehensive_fields_count: Object.keys(comprehensiveInvoiceData).length,
+            },
           },
         };
 
@@ -578,7 +630,7 @@ export function TransactionConfirmation({
           throw new Error('Failed to store transaction record');
         }
 
-        console.log('Transaction data stored successfully.');
+        console.log('Transaction stored with consistent essential data structure approach.');
       }
 
       // Set status to confirmed after processing all invoices
