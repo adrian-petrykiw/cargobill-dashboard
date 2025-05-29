@@ -25,7 +25,7 @@ import {
   TOKENS,
   USDC_MINT,
 } from '@/constants/solana';
-import { EnrichedVendorFormValues } from '@/schemas/vendor.schema';
+import { EnrichedVendorFormValues, Invoice } from '@/schemas/vendor.schema';
 import { PaymentDetailsFormValues } from '@/schemas/vendor.schema';
 import { formatPaymentMethod } from '@/lib/formatters/payment-method';
 import { TransactionMessage } from '@solana/web3.js';
@@ -35,16 +35,10 @@ import {
   vaultTransactionExecuteSync,
 } from '@/lib/helpers/squadsUtils';
 import { transactionApi } from '@/services/api/transactionApi';
-
-// Clean interface for Invoice type
-interface Invoice {
-  number: string;
-  amount: number;
-  files?: File[];
-}
+import { mapPaymentMethodToDbValue } from '@/lib/formatters/transactionMappers';
 
 interface TransactionConfirmationProps {
-  onClose: () => Promise<void>; // Updated to return Promise
+  onClose: () => Promise<void>;
   onBack: () => void;
   vendorData: EnrichedVendorFormValues;
   paymentData: PaymentDetailsFormValues;
@@ -247,6 +241,13 @@ export function TransactionConfirmation({
       // Extract custom fields from vendor data
       const customFields = extractCustomFields(vendorData);
       console.log('Custom fields extracted:', customFields);
+
+      // Convert frontend payment method to database payment_method value
+      const dbPaymentMethod = mapPaymentMethodToDbValue(paymentData.paymentMethod);
+      console.log('Payment method mapping:', {
+        frontend: paymentData.paymentMethod,
+        database: dbPaymentMethod,
+      });
 
       // Process each invoice with consistent data structure approach
       for (const invoice of vendorData.invoices as Invoice[]) {
@@ -595,6 +596,7 @@ export function TransactionConfirmation({
           },
           amount: invoice.amount,
           transaction_type: 'payment' as const,
+          payment_method: dbPaymentMethod,
           sender: {
             multisig_address: multisigAddress.toString(),
             vault_address: vaultPda.toString(),
@@ -626,6 +628,31 @@ export function TransactionConfirmation({
               essential_fields_count: Object.keys(essentialInvoiceData.invoice).length,
               comprehensive_fields_count: Object.keys(comprehensiveInvoiceData).length,
             },
+            // Store payment method details in metadata for reference
+            payment_method_details: {
+              frontend_selection: paymentData.paymentMethod,
+              database_value: dbPaymentMethod,
+              ...((paymentData.paymentMethod === 'ach' || paymentData.paymentMethod === 'wire') && {
+                account_details: {
+                  account_name: paymentData.accountName,
+                  account_type: paymentData.accountType,
+                  bank_name: paymentData.bankName,
+                  swift_code: paymentData.swiftCode,
+                },
+              }),
+              ...((paymentData.paymentMethod === 'credit_card' ||
+                paymentData.paymentMethod === 'debit_card') && {
+                card_details: {
+                  billing_name: paymentData.billingName,
+                  billing_address: {
+                    address: paymentData.billingAddress,
+                    city: paymentData.billingCity,
+                    state: paymentData.billingState,
+                    zip: paymentData.billingZip,
+                  },
+                },
+              }),
+            },
           },
           // Include recipient organization information for proper database storage
           recipient_organization_id: recipientOrganizationId,
@@ -633,16 +660,17 @@ export function TransactionConfirmation({
         };
 
         // Store the transaction using the transaction API service
-        console.log('Storing transaction with recipient organization mapping:', {
+        console.log('Storing transaction with payment method:', {
           senderOrgId: organization.id,
           recipientOrgId: recipientOrganizationId,
           signature: executeSignature,
           amount: invoice.amount,
+          paymentMethod: dbPaymentMethod,
         });
 
         await transactionApi.storeTransaction(transactionData);
 
-        console.log('Transaction stored successfully with essential data structure approach.');
+        console.log('Transaction stored successfully with payment method:', dbPaymentMethod);
       }
 
       // Set status to confirmed after processing all invoices
@@ -824,7 +852,8 @@ export function TransactionConfirmation({
           <p>
             By confirming this transaction, you authorize the transfer of{' '}
             {vendorData.totalAmount?.toFixed(2)} {paymentData.tokenType} from your business wallet
-            to {vendorData.receiverDetails?.name || 'the vendor'}.
+            to {vendorData.receiverDetails?.name || 'the vendor'} using{' '}
+            {formatPaymentMethod(paymentData.paymentMethod)}.
           </p>
         </div>
       </div>

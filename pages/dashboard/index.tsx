@@ -21,6 +21,7 @@ import { toast } from 'react-hot-toast';
 import { useSyncOnboardingState } from '@/hooks/useSyncOnboardingState';
 import { BusinessWalletCard } from '@/features/dashboard/components/BusinessWalletCard';
 import { SendTransactionModal } from '@/features/transactions/components/SendTransactionModal';
+import { useSolanaWallets } from '@privy-io/react-auth';
 
 export default function Dashboard() {
   const user = useUserStore((state) => state.user);
@@ -29,6 +30,9 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { organizations, isLoading: isLoadingOrgs, organization } = useOrganizations();
   useSyncOnboardingState();
+
+  const { wallets, ready } = useSolanaWallets();
+  const embeddedWallet = wallets.find((wallet) => wallet.walletClientType === 'privy');
 
   // Determine if we should show onboarding
   useEffect(() => {
@@ -118,6 +122,8 @@ export default function Dashboard() {
     setShowSendModal(true);
   };
 
+  const isWalletReady = ready && !!embeddedWallet?.address;
+
   return (
     <ProtectedLayout title="Dashboard · CargoBill">
       <div className="space-y-5">
@@ -183,7 +189,38 @@ export default function Dashboard() {
             <CardHeader className="pb-0">
               <div className="flex items-between justify-between">
                 <h2 className="text-md font-medium">Treasury</h2>
-                <Button variant="link" className="text-xs p-0 h-auto">
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-0 font-medium text-black hover:bg-transparent hover:text-gray-600 mr-[4px]"
+                  onClick={(e) => {
+                    if (!isBusinessVerified) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toast.error('Please complete business verification', {
+                        duration: 3000,
+                        position: 'top-center',
+                        icon: '🔒',
+                      });
+                      return;
+                    } else if (!isWalletReady) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toast.error('Wallet not connected', {
+                        duration: 3000,
+                        position: 'top-center',
+                      });
+                      return;
+                    } else {
+                      // handleOpenModal();
+                      toast.error('Upgrade business tier to unlock yield', {
+                        duration: 3000,
+                        position: 'top-center',
+                      });
+                    }
+                  }}
+                >
                   Manage →
                 </Button>
               </div>

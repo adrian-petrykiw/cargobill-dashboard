@@ -20,7 +20,20 @@ const storeTransactionSchema = z.object({
     essential_data_used: z.record(z.any()),
   }),
   amount: z.number().positive(),
-  transaction_type: z.enum(['payment', 'transfer', 'request', 'other']),
+  transaction_type: z.enum(['payment', 'transfer', 'request', 'deposit', 'withdrawal', 'fee']),
+  payment_method: z
+    .enum([
+      'operational_wallet',
+      'cashback',
+      'treasury_wallet',
+      'yield_wallet',
+      'fbo_account',
+      'virtual_card',
+      'physical_card',
+      'external_card',
+      'external_bank_account',
+    ])
+    .optional(),
   sender: z.object({
     multisig_address: z.string(),
     vault_address: z.string(),
@@ -37,7 +50,19 @@ const storeTransactionSchema = z.object({
       file_count: z.number().optional(),
     }),
   ),
-  status: z.string().default('confirmed'),
+  status: z
+    .enum([
+      'draft',
+      'pending',
+      'approved',
+      'rejected',
+      'completed',
+      'failed',
+      'cancelled',
+      'confirmed',
+      'requested',
+    ])
+    .default('confirmed'),
   restricted_payment_methods: z.array(z.string()).optional(),
   metadata: z
     .object({
@@ -49,6 +74,7 @@ const storeTransactionSchema = z.object({
       memo_data_size: z.number().optional(),
       memo_hash_length: z.number().optional(),
       data_structure_consistency: z.record(z.any()).optional(),
+      payment_method_details: z.record(z.any()).optional(),
     })
     .optional(),
   // Optional fields that might be provided
@@ -127,10 +153,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const dbTransactionData = {
       amount: transactionData.amount,
       fee_amount: 0, // Default fee amount, can be updated if provided
-      currency: 'USD', // Default to USD, could be derived from token_mint
+      currency: 'USDC', // Default to USDC, could be derived from token_mint
       signature: transactionData.signature,
       token_mint: transactionData.token_mint,
       transaction_type: transactionData.transaction_type,
+      payment_method: transactionData.payment_method || null, // Include payment_method field
       status: transactionData.status,
       sender_organization_id: transactionData.organization_id,
       recipient_organization_id: recipientOrganizationId,
@@ -153,6 +180,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       sender_org: transactionData.organization_id,
       recipient_org: recipientOrganizationId,
       amount: transactionData.amount,
+      payment_method: transactionData.payment_method,
       signature: transactionData.signature,
       invoices_count: transactionData.invoices.length,
     });
@@ -160,7 +188,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // Store the transaction using the repository
     const storedTransaction = await transactionRepository.create(dbTransactionData, req.user.id);
 
-    console.log('Transaction stored successfully:', storedTransaction.id);
+    console.log('Transaction stored successfully:', {
+      id: storedTransaction.id,
+      payment_method: storedTransaction.payment_method,
+    });
 
     return res.status(201).json({
       success: true,
@@ -187,6 +218,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           error: {
             code: 'INVALID_REFERENCE',
             message: 'Referenced organization or user not found',
+          },
+        });
+      }
+
+      if (error.message.includes('payment_method_check')) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_PAYMENT_METHOD',
+            message: 'Invalid payment method provided',
           },
         });
       }

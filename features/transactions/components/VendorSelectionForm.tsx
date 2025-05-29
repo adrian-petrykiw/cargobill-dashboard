@@ -345,9 +345,18 @@ export function VendorSelectionForm({
                       <p className="text-xs text-muted-foreground">
                         Address: {vendorDetails.primary_address || 'NA'}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Phone #: {vendorDetails.business_details?.phone || 'NA'}
-                      </p>
+                      <div className="flex gap-4">
+                        <p className="text-xs text-muted-foreground">
+                          Phone #: {vendorDetails.business_details?.phone || 'NA'}
+                        </p>{' '}
+                        {/* {vendorDetails.business_details?.website &&
+                          vendorDetails.business_details?.website !== '' &&
+                          vendorDetails.business_details?.website !== 'NA' && (
+                            <p className="text-xs text-muted-foreground">
+                              Website: {vendorDetails.business_details?.website || 'NA'}
+                            </p>
+                          )} */}
+                      </div>
                     </div>
                   ) : null}
                 </CardContent>

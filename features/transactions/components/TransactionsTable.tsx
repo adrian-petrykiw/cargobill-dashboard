@@ -8,20 +8,27 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, X, ArrowUpDown } from 'lucide-react';
+import { Pencil, X, ArrowUpDown, RefreshCw } from 'lucide-react';
 import { BusinessWalletTransaction } from '@/types/businessWalletTransaction';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
 
 type SortField = 'date' | 'transactionId' | 'counterparty' | 'paymentMethod' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
 
 type TransactionsTableProps = {
   transactions: BusinessWalletTransaction[];
-  onRowClick?: (id: string) => void;
-  onEdit?: (id: string) => void;
-  onCancel?: (id: string) => void;
-  onPay?: (id: string) => void;
+  onRowClick?: (transaction: BusinessWalletTransaction) => void;
+  onEdit?: (transaction: BusinessWalletTransaction) => void;
+  onCancel?: (transaction: BusinessWalletTransaction) => void;
+  onPay?: (transaction: BusinessWalletTransaction) => void;
+  hasError?: boolean;
+  isLoading?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  error?: Error | null;
+  showOrganizationLoading?: boolean;
 };
 
 // Function to format date with timestamp if not already present
@@ -42,7 +49,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-gray-200 text-gray-800 hover:bg-gray-200 rounded px-3 py-1 text-xs"
+          className="bg-gray-200 text-black hover:bg-gray-200 rounded px-3 py-1 text-xs"
         >
           Draft
         </Badge>
@@ -51,7 +58,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-blue-100 text-blue-800 hover:bg-blue-100 rounded px-3 py-1 text-xs"
+          className="bg-blue-600 text-white hover:bg-blue-100 border-blue-600 rounded px-3 py-1 text-xs"
         >
           Open
         </Badge>
@@ -60,7 +67,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-gray-900 text-white hover:bg-gray-800 rounded px-3 py-1 text-xs"
+          className="bg-black text-white hover:bg-gray-800 border-black rounded px-3 py-1 text-xs"
         >
           Scheduled
         </Badge>
@@ -69,7 +76,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 rounded px-3 py-1 text-xs"
+          className="bg-orange-400 text-black hover:bg-orange-400 border-orange-400 rounded px-3 py-1 text-xs"
         >
           Pending
         </Badge>
@@ -78,7 +85,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-yellow-200 text-yellow-800 hover:bg-yellow-200 rounded px-3 py-1 text-xs"
+          className="bg-yellow-300 text-black hover:bg-yellow-300 border-yellow-300 rounded px-3 py-1 text-xs"
         >
           Confirmed
         </Badge>
@@ -87,7 +94,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-green-100 text-green-800 hover:bg-green-100 rounded px-3 py-1 text-xs"
+          className="bg-green-500 text-white hover:bg-green-500 border-green-500 rounded px-3 py-1 text-xs"
         >
           Completed
         </Badge>
@@ -96,7 +103,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-red-100 text-red-800 hover:bg-red-100 rounded px-3 py-1 text-xs"
+          className="bg-red-500 text-black hover:bg-red-500 border-red-500 rounded px-3 py-1 text-xs"
         >
           Failed
         </Badge>
@@ -105,7 +112,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-red-100 text-red-800 hover:bg-red-100 rounded px-3 py-1 text-xs"
+          className="bg-red-500 text-white hover:bg-red-500 border-red-500 rounded px-3 py-1 text-xs"
         >
           Cancelled
         </Badge>
@@ -114,7 +121,7 @@ const getStatusBadge = (status: BusinessWalletTransaction['status']) => {
       return (
         <Badge
           variant="outline"
-          className="bg-gray-200 text-gray-800 hover:bg-gray-200 rounded px-3 py-1 text-xs"
+          className="bg-gray-200 text-black hover:bg-gray-200 rounded px-3 py-1 text-xs"
         >
           {status}
         </Badge>
@@ -133,9 +140,27 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
   onEdit,
   onCancel,
   onPay,
+  hasError = false,
+  isLoading = false,
+  onRefresh,
+  isRefreshing = false,
+  error,
+  showOrganizationLoading = false,
 }) => {
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // DEFENSIVE: Ensure transactions is always an array
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+
+  console.log('TransactionsTable received:', {
+    transactions: transactions,
+    isArray: Array.isArray(transactions),
+    length: Array.isArray(transactions) ? transactions.length : 'N/A',
+    type: typeof transactions,
+    hasError,
+    isLoading,
+  });
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -146,7 +171,8 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
     }
   };
 
-  const sortedTransactions = [...transactions].sort((a, b) => {
+  // DEFENSIVE: Use safeTransactions instead of transactions
+  const sortedTransactions = [...safeTransactions].sort((a, b) => {
     if (!sortField) return 0;
 
     const direction = sortDirection === 'asc' ? 1 : -1;
@@ -184,8 +210,86 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
     );
   };
 
+  // If invalid data type, show error state
+  if (!Array.isArray(transactions)) {
+    console.error('TransactionsTable: transactions prop is not an array:', {
+      received: transactions,
+      type: typeof transactions,
+    });
+
+    return (
+      <div className="border border-gray-200 rounded-xs overflow-hidden">
+        <Table>
+          <TableHeader className="bg-slate-200 h-10">
+            <TableRow>
+              <TableHead className="w-8 px-3">
+                <Checkbox
+                  className="rounded border-gray-300"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase text-gray-500 px-3 py-2">
+                DATE
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase text-gray-500 px-3 py-2">
+                TRANSACTION ID
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase text-gray-500 px-3 py-2">
+                TO/FROM
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase text-gray-500 px-3 py-2">
+                PAYMENT METHOD
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase text-gray-500 px-3 py-2">
+                STATUS
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase text-gray-500 px-3 py-2">
+                AMOUNT
+              </TableHead>
+              <TableHead className="w-20 px-3 text-right">
+                {onRefresh && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="p-1 h-7 w-7 hover:bg-transparent"
+                    onClick={onRefresh}
+                    disabled={isRefreshing}
+                  >
+                    <RefreshCw
+                      className={cn(
+                        'h-4 w-4 text-gray-500 hover:text-gray-700 transition-all',
+                        isRefreshing && 'animate-spin',
+                      )}
+                    />
+                  </Button>
+                )}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="bg-white">
+            <TableRow className="bg-white">
+              <TableCell colSpan={8} className="py-8 text-center">
+                <div className="text-red-600">
+                  <h3 className="text-lg font-semibold mb-2">Data Error</h3>
+                  <p className="mb-4">
+                    Invalid transaction data received. Please refresh the page.
+                  </p>
+                  {onRefresh && (
+                    <Button onClick={onRefresh} variant="outline" size="sm">
+                      Try Again
+                    </Button>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
+
   return (
-    <div className="overflow-x-auto">
+    <div className="border border-gray-200 rounded-md overflow-hidden">
       <Table>
         <TableHeader className="bg-slate-200 h-10">
           <TableRow>
@@ -228,13 +332,89 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
             >
               AMOUNT {renderSortIcon('amount')}
             </TableHead>
-            <TableHead className="w-20 px-3"></TableHead>
+            <TableHead className="w-20 px-3 text-right">
+              {onRefresh && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-1 h-7 w-7 hover:bg-transparent"
+                  onClick={onRefresh}
+                  disabled={isRefreshing || isLoading || showOrganizationLoading}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'h-4 w-4 text-gray-500 hover:text-gray-700 transition-all',
+                      (isRefreshing || isLoading) && 'animate-spin',
+                    )}
+                  />
+                </Button>
+              )}
+            </TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody className="divide-y divide-gray-200">
-          {sortedTransactions.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={8} className="py-6 text-center text-white">
+        <TableBody className="divide-y divide-gray-200 bg-white">
+          {showOrganizationLoading ? (
+            // Show skeleton loading rows when organization is loading
+            <>
+              {[...Array(5)].map((_, index) => (
+                <TableRow key={`skeleton-${index}`} className="bg-white h-10">
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-20 h-3 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-16 h-3 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-24 h-3 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-20 h-3 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-16 h-5 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-16 h-3 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="px-3 py-2 align-middle h-10">
+                    <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </>
+          ) : hasError ? (
+            <TableRow className="bg-white">
+              <TableCell colSpan={8} className="py-8 text-center">
+                <div className="text-red-600">
+                  <h3 className="text-lg font-semibold mb-2">Failed to fetch transactions</h3>
+                  <p className="text-gray-600 mb-4">
+                    {error instanceof Error
+                      ? error.message
+                      : 'An unexpected error occurred while loading transactions.'}
+                  </p>
+                  {onRefresh && (
+                    <Button onClick={onRefresh} variant="outline" size="sm" disabled={isRefreshing}>
+                      {isRefreshing ? 'Retrying...' : 'Try Again'}
+                    </Button>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : isLoading ? (
+            <TableRow className="bg-white">
+              <TableCell colSpan={8} className="py-8 text-center text-gray-500">
+                <div className="flex items-center justify-center space-x-2">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Loading transactions...</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : sortedTransactions.length === 0 ? (
+            <TableRow className="bg-white">
+              <TableCell colSpan={8} className="py-8 text-center text-gray-500">
                 No transactions found
               </TableCell>
             </TableRow>
@@ -242,8 +422,8 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
             sortedTransactions.map((transaction) => (
               <TableRow
                 key={transaction.id}
-                className=" bg-white  h-10"
-                // onClick={() => onRowClick?.(transaction.id)}
+                className="bg-white h-10 hover:bg-gray-50 cursor-pointer"
+                onClick={() => onRowClick?.(transaction)}
               >
                 <TableCell className="px-3 py-2 align-middle h-10">
                   <Checkbox onClick={(e) => e.stopPropagation()} />
@@ -289,9 +469,9 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onPay(transaction.id);
+                          onPay(transaction);
                         }}
-                        className="h-8 flex items-center gap-1 border-none shadow-none bg-transparent hover:bg-gray-100 text-gray-600 p-3"
+                        className="h-8 flex items-center gap-1 border-none shadow-none bg-transparent font-semibold text-xs hover:bg-slate-100 text-slate-600 p-3"
                       >
                         Pay
                       </Button>
@@ -302,10 +482,10 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
                             className="text-slate-900 h-8 w-8 flex items-center justify-center rounded hover:bg-slate-100"
                             onClick={(e) => {
                               e.stopPropagation();
-                              onEdit(transaction.id);
+                              onEdit(transaction);
                             }}
                           >
-                            <Pencil size={16} />
+                            <Pencil size={14} />
                           </button>
                         )}
                         {onCancel && (
@@ -313,10 +493,10 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
                             className="text-red-600 h-8 w-8 flex items-center justify-center rounded hover:bg-slate-100"
                             onClick={(e) => {
                               e.stopPropagation();
-                              onCancel(transaction.id);
+                              onCancel(transaction);
                             }}
                           >
-                            <X size={16} />
+                            <X size={18} />
                           </button>
                         )}
                       </>

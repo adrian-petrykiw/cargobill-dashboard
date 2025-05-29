@@ -198,29 +198,32 @@ export function DepositModal({ tokenBalances }: DepositModalProps) {
           variant="ghost"
           size="sm"
           className="p-0 font-medium text-black hover:bg-transparent hover:text-gray-600 mr-[4px]"
-          onClick={() => {
+          onClick={(e) => {
             if (!isBusinessVerified) {
-              toast.error('Please complete business verification first', {
+              e.preventDefault();
+              e.stopPropagation();
+              toast.error('Please complete business verification', {
                 duration: 3000,
                 position: 'top-center',
                 icon: '🔒',
               });
               return;
-            }
-            if (!isWalletReady) {
-              toast.error('Wallet not connected or ready', {
+            } else if (!isWalletReady) {
+              e.preventDefault();
+              e.stopPropagation();
+              toast.error('Wallet not connected', {
                 duration: 3000,
                 position: 'top-center',
               });
               return;
+            } else {
+              handleOpenModal();
             }
-            handleOpenModal();
           }}
         >
           Deposit +
         </Button>
       </DialogTrigger>
-
       <DialogContent
         className="max-w-md"
         onPointerDownOutside={(e) => {

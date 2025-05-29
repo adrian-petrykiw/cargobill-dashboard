@@ -1,8 +1,9 @@
 // pages/banking/index.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -11,24 +12,49 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Copy, Plus, RefreshCw } from 'lucide-react';
+import { Copy, Plus, RefreshCw, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import Spinner from '@/components/common/Spinner';
 import type { BankingTransfer } from '@/schemas/banking.schema';
 import { useFBODetails, useFBOTransfers } from '@/features/banking/hooks/useBanking';
+import { useOrganizations } from '@/hooks/useOrganizations';
+import { useSolanaWallets } from '@privy-io/react-auth';
+import { PublicKey } from '@solana/web3.js';
 
 export default function Banking() {
+  const { wallets, ready } = useSolanaWallets();
+  const embeddedWallet = wallets.find((wallet) => wallet.walletClientType === 'privy');
+
+  const [hasShownFBOError, setHasShownFBOError] = useState(false);
+
+  // Get organization data first
+  const { organization, isLoading: isLoadingOrg } = useOrganizations();
+
+  // Check if organization has FBO account
+  const hasFBOAccount = Boolean(organization?.fbo_account_id);
+
+  // Only make API calls if FBO account exists
   const {
     accountDetails,
     isLoading: isLoadingAccount,
     error: accountError,
     refetch: refetchAccount,
-  } = useFBODetails();
+  } = useFBODetails(hasFBOAccount);
+
   const {
     transfers,
     isLoading: isLoadingTransfers,
     error: transfersError,
     refetch: refetchTransfers,
-  } = useFBOTransfers();
+  } = useFBOTransfers(undefined, hasFBOAccount);
+
+  // Show FBO error toast once when component loads and no FBO account
+  useEffect(() => {
+    if (!isLoadingOrg && !hasFBOAccount && !hasShownFBOError) {
+      toast.error('Please contact support to enable CargoBill banking');
+      setHasShownFBOError(true);
+    }
+  }, [isLoadingOrg, hasFBOAccount, hasShownFBOError]);
 
   const handleCopyToClipboard = async (text: string, type: string) => {
     try {
@@ -91,6 +117,15 @@ export default function Banking() {
   //   toast.success('Data refreshed');
   // };
 
+  const isBusinessVerified = !!(
+    organization &&
+    organization.last_verified_at !== null &&
+    organization.verification_status === 'verified'
+  );
+
+  // Check if wallet is ready and connected
+  const isWalletReady = ready && !!embeddedWallet?.address;
+
   return (
     <ProtectedLayout title="Banking · CargoBill">
       <div className="space-y-6">
@@ -102,25 +137,154 @@ export default function Banking() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button> */}
-            <Button className="h-8">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button
+              className="h-8"
+              onClick={(e) => {
+                if (!isBusinessVerified) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toast.error('Please complete business verification', {
+                    duration: 3000,
+                    position: 'top-center',
+                    icon: '🔒',
+                  });
+                  return;
+                } else if (!isWalletReady) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toast.error('Wallet not connected', {
+                    duration: 3000,
+                    position: 'top-center',
+                  });
+                  return;
+                } else {
+                  // handleOpenModal();
+                  toast.error('Contact support to unlock transfers', {
+                    duration: 3000,
+                    position: 'top-center',
+                  });
+                }
+              }}
+            >
+              <Plus className="h-4 w-4" />
               New Transfer
             </Button>
           </div>
         </div>
+
+        {/* Account Balance Section */}
+        <Card className="bg-white border-gray-200">
+          <CardContent className="pt-0">
+            {!hasFBOAccount ? (
+              <div className="flex items-end justify-between py-4">
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Current Balance</p>
+                    <p className="text-3xl font-bold text-gray-900">NA</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500 mb-1">Available Balance</p>
+                  <p className="text-sm text-gray-900">NA</p>
+                </div>
+              </div>
+            ) : isLoadingAccount ? (
+              <div className="flex items-end justify-between py-4">
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Current Balance</p>
+                    <Skeleton className="h-9 w-20 bg-gray-600/20" />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500 mb-1">Available Balance</p>
+                  <Skeleton className="h-4 w-16 bg-gray-600/20" />
+                </div>
+              </div>
+            ) : accountError ? (
+              <div className="text-center py-8">
+                <p className="text-red-500 text-sm mb-4">
+                  Error loading balance: {(accountError as Error).message}
+                </p>
+                <Button variant="outline" size="sm" onClick={() => refetchAccount()}>
+                  Retry
+                </Button>
+              </div>
+            ) : accountDetails ? (
+              <div className="flex items-end justify-between">
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Current Balance</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {accountDetails.balance ? formatAmount(accountDetails.balance) : 'NA'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500 mb-1">Available Balance</p>
+                  <p className="text-sm text-gray-900">
+                    {accountDetails.balance ? formatAmount(accountDetails.balance) : 'NA'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No balance information available</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Account Details Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-md font-medium">Account Details</h2>
           </div>
-
           <Card>
-            <CardContent className="pt-6">
-              {isLoadingAccount ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-                  <p className="text-gray-500 text-sm">Loading account details...</p>
+            <CardContent className="space-y-10">
+              {!hasFBOAccount ? (
+                <div className="flex flex-col sm:flex-row sm:items-start gap-6 sm:gap-8">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">ACH Account Number</h3>
+                    <p className="text-sm text-gray-900">NA</p>
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">ACH Routing Number</h3>
+                    <p className="text-sm text-gray-900">NA</p>
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Type</h3>
+                    <p className="text-sm text-gray-900">NA</p>
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Status</h3>
+                    <p className="text-sm text-gray-900">NA</p>
+                  </div>
+                </div>
+              ) : isLoadingAccount ? (
+                <div className="flex flex-col sm:flex-row sm:items-start gap-6 sm:gap-8">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">ACH Account Number</h3>
+                    <Skeleton className="h-6 w-full bg-gray-600/20" />
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">ACH Routing Number</h3>
+                    <Skeleton className="h-6 w-full bg-gray-600/20" />
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Type</h3>
+                    <Skeleton className="h-6 w-full bg-gray-600/20" />
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Status</h3>
+                    <Skeleton className="h-6 w-full bg-gray-600/20" />
+                  </div>
                 </div>
               ) : accountError ? (
                 <div className="text-center py-8">
@@ -132,9 +296,9 @@ export default function Banking() {
                   </Button>
                 </div>
               ) : accountDetails ? (
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Number</h3>
+                <div className="flex flex-col sm:flex-row sm:items-start gap-6 sm:gap-8">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">ACH Account Number</h3>
                     <div className="flex items-center">
                       <p className="font-mono text-sm">
                         {maskAccountNumber(accountDetails.account_num)}
@@ -144,7 +308,7 @@ export default function Banking() {
                         size="sm"
                         className="h-6 w-6 p-0 ml-2"
                         onClick={() =>
-                          handleCopyToClipboard(accountDetails.account_num, 'Account number')
+                          handleCopyToClipboard(accountDetails.account_num, 'ACH Account number')
                         }
                       >
                         <Copy className="h-4 w-4" />
@@ -152,8 +316,8 @@ export default function Banking() {
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Routing Number</h3>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">ACH Routing Number</h3>
                     <div className="flex items-center">
                       <p className="font-mono text-sm">
                         {maskRoutingNumber(accountDetails.routing_num)}
@@ -172,11 +336,16 @@ export default function Banking() {
                   </div>
 
                   {/* <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account ID</h3>
-                    <p className="text-sm font-mono text-gray-600">{accountDetails.account_id}</p>
-                  </div> */}
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Account ID</h3>
+            <p className="text-sm font-mono text-gray-600">{accountDetails.account_id}</p>
+          </div> */}
 
-                  <div>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Type</h3>
+                    <p className="text-sm">{accountDetails.account_type}</p>
+                  </div>
+
+                  <div className="flex-1">
                     <h3 className="text-sm font-medium text-gray-500 mb-2">Account Status</h3>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
@@ -189,15 +358,10 @@ export default function Banking() {
                     </span>
                   </div>
 
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Type</h3>
-                    <p className="text-sm">{accountDetails.account_type}</p>
-                  </div>
-
                   {/* <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Account Name</h3>
-                    <p className="text-sm">{accountDetails.account_name}</p>
-                  </div> */}
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Account Name</h3>
+            <p className="text-sm">{accountDetails.account_name}</p>
+          </div> */}
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -212,9 +376,6 @@ export default function Banking() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-md font-medium">Transfer History</h2>
-            <Button variant="link" className="text-xs p-0 h-auto">
-              View all
-            </Button>
           </div>
 
           <Card className="p-0 overflow-hidden">
@@ -243,11 +404,20 @@ export default function Banking() {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-200">
-                  {isLoadingTransfers ? (
+                  {!hasFBOAccount ? (
+                    <TableRow>
+                      <TableCell
+                        className="text-center text-xs text-gray-500 py-8 px-6"
+                        colSpan={6}
+                      >
+                        No transfers found
+                      </TableCell>
+                    </TableRow>
+                  ) : isLoadingTransfers ? (
                     <TableRow>
                       <TableCell className="text-center py-8 px-6" colSpan={6}>
                         <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mr-3"></div>
+                          <Spinner size="sm" className="mr-3" />
                           <span className="text-xs text-gray-500">Loading transfers...</span>
                         </div>
                       </TableCell>

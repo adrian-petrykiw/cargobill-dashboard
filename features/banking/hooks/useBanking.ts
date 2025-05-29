@@ -7,7 +7,7 @@ import type {
   TransferHistoryParams,
 } from '@/schemas/banking.schema';
 
-export function useFBODetails() {
+export function useFBODetails(enabled: boolean = true) {
   const accountQuery = useQuery<AccountDetail>({
     queryKey: ['fboAccountDetails'],
     queryFn: async () => {
@@ -16,6 +16,7 @@ export function useFBODetails() {
       console.log('FBO account details fetched:', accountDetails);
       return accountDetails;
     },
+    enabled, // Only run query if enabled is true (i.e., FBO account exists)
     retry: 3,
     retryDelay: 1000,
     staleTime: 30000, // 30 seconds
@@ -29,7 +30,7 @@ export function useFBODetails() {
   };
 }
 
-export function useFBOTransfers(params?: TransferHistoryParams) {
+export function useFBOTransfers(params?: TransferHistoryParams, enabled: boolean = true) {
   const transfersQuery = useQuery<TransfersResponse>({
     queryKey: ['fboTransfers', params],
     queryFn: async () => {
@@ -38,6 +39,7 @@ export function useFBOTransfers(params?: TransferHistoryParams) {
       console.log('FBO transfers fetched:', transfers);
       return transfers;
     },
+    enabled, // Only run query if enabled is true (i.e., FBO account exists)
     retry: 3,
     retryDelay: 1000,
     staleTime: 30000, // 30 seconds

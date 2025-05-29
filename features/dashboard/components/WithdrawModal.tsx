@@ -247,8 +247,10 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
           variant="ghost"
           size="sm"
           className="p-0 font-medium text-black hover:bg-transparent hover:text-gray-600 mr-[4px]"
-          onClick={() => {
+          onClick={(e) => {
             if (!isBusinessVerified) {
+              e.preventDefault();
+              e.stopPropagation();
               toast.error('Please complete business verification first', {
                 duration: 3000,
                 position: 'top-center',
@@ -257,6 +259,8 @@ export function WithdrawModal({ tokenBalances }: WithdrawModalProps) {
               return;
             }
             if (!isWalletReady) {
+              e.preventDefault();
+              e.stopPropagation();
               toast.error('Wallet not connected or ready', {
                 duration: 3000,
                 position: 'top-center',

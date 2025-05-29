@@ -39,6 +39,13 @@ export default function AppSidebar() {
     mode === 'collapsed' || (mode === 'hover' && !router.asPath.includes('sidebar-control'));
   const shouldExpandOnHover = mode === 'hover';
 
+  // Determine if text should be visible
+  const shouldShowText = () => {
+    if (!isCollapsed) return true; // Always show when not collapsed
+    if (mode === 'hover' && isHovering) return true; // Show on hover only in hover mode
+    return false; // Never show in collapsed mode on hover
+  };
+
   return (
     <aside
       className={`h-full bg-white border-r border-gray-200 transition-all duration-300 ease-in-out flex flex-col ${
@@ -46,7 +53,7 @@ export default function AppSidebar() {
       }`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
-      style={{ overflow: 'hidden' }} // Ensure no overflow outside of sidebar
+      style={{ overflow: 'hidden' }}
     >
       <div className="py-4 flex-1">
         {navigationItems.map((item) => (
@@ -67,7 +74,7 @@ export default function AppSidebar() {
             </span>
             <span
               className={`whitespace-nowrap transition-opacity duration-300 ${
-                isCollapsed && !isHovering ? 'opacity-0' : 'opacity-100'
+                shouldShowText() ? 'opacity-100' : 'opacity-0'
               }`}
             >
               {item.name}
@@ -77,7 +84,7 @@ export default function AppSidebar() {
       </div>
 
       {/* Sidebar control menu */}
-      <div className="mt-auto">
+      <div className="mt-auto relative">
         <Menu as="div" className="relative">
           <Menu.Button
             className="flex items-center gap-3 rounded-md p-2 text-sm font-medium transition-colors mx-2 my-1 text-gray-400 hover:bg-accent hover:text-gray-400"
@@ -87,6 +94,7 @@ export default function AppSidebar() {
               <MdViewSidebar size={18} />
             </span>
           </Menu.Button>
+
           <Transition
             as={Fragment}
             enter="transition ease-out duration-100"
@@ -96,7 +104,14 @@ export default function AppSidebar() {
             leaveFrom="transform opacity-100 scale-100"
             leaveTo="transform opacity-0 scale-95"
           >
-            <Menu.Items className="absolute bottom-full left-4 mb-2 w-48 origin-bottom-left bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-30">
+            <Menu.Items
+              className="w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-[9999]"
+              style={{
+                bottom: '2.5rem',
+                left: '0.75rem',
+                position: 'fixed',
+              }}
+            >
               <div className="p-1 border-b border-gray-100">
                 <div className="px-3 py-1 text-xs font-medium text-gray-500">Sidebar Control</div>
               </div>

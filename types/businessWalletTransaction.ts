@@ -1,3 +1,4 @@
+// types/businessWalletTransaction.ts
 export type BusinessWalletTransactionStatus =
   | 'draft'
   | 'open'
