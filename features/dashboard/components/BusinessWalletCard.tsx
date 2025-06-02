@@ -9,6 +9,7 @@ import { useTokenBalances } from '@/hooks/useTokenBalances';
 import { BalanceChart } from './BalanceChart';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
+import { SwapModal } from './SwapModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useOrganizations } from '@/hooks/useOrganizations';
@@ -84,6 +85,8 @@ export function BusinessWalletCard() {
             </Button>
           </div>
           <div className="flex space-x-2">
+            <SwapModal tokenBalances={tokenBalances} />
+
             <DepositModal tokenBalances={tokenBalances} />
             <WithdrawModal tokenBalances={tokenBalances} />
           </div>
