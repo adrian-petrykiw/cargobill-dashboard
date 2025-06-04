@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 interface TransactionStatusProps {
-  onDone: () => Promise<void>; // Changed to Promise to handle async operations
+  onDone: () => Promise<void>;
   currentStatus: 'encrypting' | 'creating' | 'confirming' | 'confirmed';
 }
 
@@ -15,7 +15,8 @@ export function TransactionStatus({ onDone, currentStatus }: TransactionStatusPr
 
   useEffect(() => {
     if (currentStatus === 'confirmed') {
-      setShowDone(true);
+      const timer = setTimeout(() => setShowDone(true), 1000);
+      return () => clearTimeout(timer);
     }
   }, [currentStatus]);
 
@@ -32,7 +33,7 @@ export function TransactionStatus({ onDone, currentStatus }: TransactionStatusPr
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 py-6">
       <div className="space-y-4">
         <StatusItem
           title="Encrypting Business Data"
@@ -54,31 +55,29 @@ export function TransactionStatus({ onDone, currentStatus }: TransactionStatusPr
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Check className="h-5 w-5 text-green-500" />
-                <span className="text-green-600 font-medium">Payment Completed</span>
+                <span className="text-green-600 font-medium text-sm">Payment Completed</span>
               </div>
               <Button
                 onClick={handleDone}
                 variant="outline"
                 disabled={isCompleting}
-                className="px-4 py-2 text-green-600 border-green-200 hover:bg-green-100 disabled:opacity-50"
+                className="px-4 py-2 bg-white text-green-600 border-green-200 hover:bg-green-100 hover:text-green-600 disabled:opacity-50"
               >
                 {isCompleting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-0 animate-spin" />
-                    {/* Finalizing */}
                   </>
                 ) : (
                   'Done'
                 )}
               </Button>
             </div>
-            {/* {isCompleting ||
-              (true && (
-                <div className="mt-2 text-xs text-green-600">
-                  Updating records and refreshing data...
-                </div>
-              ))} */}
           </Card>
+        )}
+        {currentStatus !== 'confirmed' && (
+          <div className="text-center text-xs text-gray-500 mt-4">
+            Do not close this window until the transaction completes
+          </div>
         )}
       </div>
     </div>
@@ -95,10 +94,10 @@ function StatusItem({
   isDone: boolean;
 }) {
   return (
-    <Card className="p-4">
+    <Card className="p-4 w-full">
       <div className="flex items-center justify-between">
         <span
-          className={`${
+          className={`text-sm ${
             isDone ? 'text-gray-500' : isActive ? 'text-blue-600 font-medium' : 'text-gray-400'
           }`}
         >

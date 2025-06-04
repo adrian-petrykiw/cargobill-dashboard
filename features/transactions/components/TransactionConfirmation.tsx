@@ -3,47 +3,31 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { PublicKey, Transaction } from '@solana/web3.js';
+import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { toast } from 'react-hot-toast';
-import {
-  getMultisigPda,
-  getVaultPda,
-  getTransactionPda,
-  accounts,
-  instructions,
-  PROGRAM_ID,
-} from '@sqds/multisig';
 import { Organization } from '@/schemas/organization.schema';
 import { TransactionStatus } from './TransactionStatus';
-import { solanaService } from '@/services/blockchain/solana';
 import { createCipheriv, createHash, randomBytes } from 'crypto';
-import { getAssociatedTokenAddress, createTransferInstruction } from '@solana/spl-token';
 import { ConnectedSolanaWallet } from '@privy-io/react-auth/solana';
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  TOKENS,
-  USDC_MINT,
-} from '@/constants/solana';
+import { TOKENS, USDC_MINT } from '@/constants/solana';
 import { EnrichedVendorFormValues, Invoice } from '@/schemas/vendor.schema';
 import { PaymentDetailsFormValues } from '@/schemas/vendor.schema';
-import { formatPaymentMethod } from '@/lib/formatters/payment-method';
-import { TransactionMessage } from '@solana/web3.js';
-import {
-  getAccountsForExecuteCore,
-  transactionMessageToVaultMessage,
-  vaultTransactionExecuteSync,
-} from '@/lib/helpers/squadsUtils';
+import { formatPaymentMethodDisplay } from '@/schemas/payment-method.schema';
 import { transactionApi } from '@/services/api/transactionApi';
 import { mapPaymentMethodToDbValue } from '@/lib/formatters/transactionMappers';
+import { paymentService } from '@/services/api/paymentApi';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { CalendarIcon } from 'lucide-react';
 
 interface TransactionConfirmationProps {
   onClose: () => Promise<void>;
   onBack: () => void;
   vendorData: EnrichedVendorFormValues;
-  paymentData: PaymentDetailsFormValues;
+  paymentData: PaymentDetailsFormValues & { onrampFee: number };
   wallet: ConnectedSolanaWallet | undefined;
   organization: Organization | null;
+  onTransactionStatusChange: (isProcessing: boolean) => void;
 }
 
 type StatusType = 'initial' | 'encrypting' | 'creating' | 'confirming' | 'confirmed';
@@ -55,9 +39,20 @@ export function TransactionConfirmation({
   paymentData,
   wallet,
   organization,
+  onTransactionStatusChange,
 }: TransactionConfirmationProps) {
   const [status, setStatus] = useState<StatusType>('initial');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Check if payment method requires onramp (not business wallet/available credit)
+  // Based on transactionMappers.ts: account_credit maps to operational_wallet (business wallet)
+  const requiresOnramp = paymentData.paymentMethod !== 'account_credit';
+
+  // Calculate totals using onramp fee from payment data
+  const subtotal = vendorData.totalAmount || 0;
+  const transactionFee = 15;
+  const onrampFeeAmount = paymentData.onrampFee || 0;
+  const total = subtotal + transactionFee + onrampFeeAmount;
 
   // Extract custom fields from vendor data
   const extractCustomFields = (vendorData: EnrichedVendorFormValues) => {
@@ -91,7 +86,10 @@ export function TransactionConfirmation({
 
     try {
       setIsProcessing(true);
+      onTransactionStatusChange(true);
       setStatus('encrypting');
+
+      console.log('🔒 Starting secure payment transaction flow');
 
       // Hash file function
       const hashFile = async (file: File): Promise<string> => {
@@ -143,13 +141,6 @@ export function TransactionConfirmation({
       const multisigAddress = new PublicKey(organization.operational_wallet.address);
       console.log('Organization multisig:', multisigAddress.toString());
 
-      // Get vault PDA
-      const [vaultPda] = getVaultPda({
-        multisigPda: multisigAddress,
-        index: 0,
-      });
-      console.log('Vault PDA:', vaultPda.toString());
-
       // Get token mint based on paymentData.tokenType
       const tokenMint = new PublicKey(
         paymentData.tokenType === 'USDC'
@@ -164,35 +155,9 @@ export function TransactionConfirmation({
                 })(),
       );
 
-      // Get connection from solanaService
-      const connection = solanaService.connection;
-
-      // Get Multisig account info
-      let senderMultisigInfo;
-      try {
-        senderMultisigInfo = await accounts.Multisig.fromAccountAddress(
-          connection,
-          multisigAddress,
-        );
-        console.log("Found sender's multisig:", {
-          threshold: senderMultisigInfo.threshold.toString(),
-          transactionIndex: senderMultisigInfo.transactionIndex.toString(),
-        });
-      } catch (err) {
-        console.error("Failed to find sender's multisig account:", err);
-        throw new Error("Sender's multisig account not found");
-      }
-
-      const vaultAta = await getAssociatedTokenAddress(
-        tokenMint,
-        vaultPda,
-        true,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID,
-      );
-      console.log('Vault ATA:', vaultAta.toString());
-
       setStatus('creating');
+
+      // Fetch vendor details
       const vendorApiResponse = await fetch(`/api/vendors/${vendorData.vendor}`);
       if (!vendorApiResponse.ok) {
         throw new Error('Failed to fetch vendor payment details');
@@ -204,7 +169,6 @@ export function TransactionConfirmation({
       }
 
       const vendorApiData = vendorApiResult.data;
-
       if (!vendorApiData.multisigAddress) {
         throw new Error('Vendor has no valid multisig address');
       }
@@ -220,24 +184,6 @@ export function TransactionConfirmation({
         multisigAddress: vendorApiData.multisigAddress,
       });
 
-      const receiverMultisigPda = new PublicKey(vendorApiData.multisigAddress);
-      const [receiverVaultPda] = getVaultPda({
-        multisigPda: receiverMultisigPda,
-        index: 0,
-      });
-
-      console.log('Receiver multisig:', receiverMultisigPda.toString());
-      console.log('Receiver vault PDA:', receiverVaultPda.toString());
-
-      const receiverAta = await getAssociatedTokenAddress(
-        tokenMint,
-        receiverVaultPda,
-        true,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID,
-      );
-      console.log('Receiver ATA:', receiverAta.toString());
-
       // Extract custom fields from vendor data
       const customFields = extractCustomFields(vendorData);
       console.log('Custom fields extracted:', customFields);
@@ -249,8 +195,18 @@ export function TransactionConfirmation({
         database: dbPaymentMethod,
       });
 
-      // Process each invoice with consistent data structure approach
-      for (const invoice of vendorData.invoices as Invoice[]) {
+      // Calculate total transaction fee (paid once for all invoices)
+      const transactionFeeAmount = Math.round(15 * 1e6); // $15 fee in token units
+      let feeCollected = false;
+
+      setStatus('confirming');
+
+      // Process each invoice using the secure backend flow
+      for (const [invoiceIndex, invoice] of (vendorData.invoices as Invoice[]).entries()) {
+        console.log(
+          `🔄 Processing invoice ${invoiceIndex + 1}/${vendorData.invoices.length}: ${invoice.number}`,
+        );
+
         // Process and hash files if present (for memo and database storage)
         if (invoice.files && invoice.files.length > 0) {
           const hashPromises = invoice.files.map((file) => hashFile(file));
@@ -261,12 +217,11 @@ export function TransactionConfirmation({
         }
 
         // Create ESSENTIAL invoice data for memo with consistent structure
-        // Always include fileHashes field for data consistency, even if empty
         const essentialInvoiceData = {
           invoice: {
             number: invoice.number,
             amount: invoice.amount,
-            fileHashes: fileHashes[invoice.number] || [], // Always present for consistency
+            fileHashes: fileHashes[invoice.number] || [],
           },
         };
 
@@ -287,398 +242,251 @@ export function TransactionConfirmation({
           organizationId: organization.id,
           walletAddress: wallet.address,
           multisigAddress: multisigAddress.toString(),
-          receiverMultisigAddress: receiverMultisigPda.toString(),
+          receiverMultisigAddress: vendorApiData.multisigAddress,
+          invoiceIndex: invoiceIndex,
+          totalInvoices: vendorData.invoices.length,
+          feeCollectedWithThisInvoice: !feeCollected,
+          onrampFee: paymentData.onrampFee,
         };
 
-        // Create deterministic hash for memo (fixed-length SHA256)
-        // Sort keys to ensure consistent hashing regardless of object property order
+        // Create deterministic hash for memo
         const memoDataHash = createHash('sha256')
           .update(JSON.stringify(essentialInvoiceData, Object.keys(essentialInvoiceData).sort()))
           .digest('hex');
 
-        // Store the memo hash for reference
         memoHashes[invoice.number] = memoDataHash;
 
         // Encrypt comprehensive data for database storage
         const { encrypted: dbEncryptedData, key: dbEncryptionKey } =
           encryptPaymentData(comprehensiveInvoiceData);
 
-        // Store database encryption key
         encryptionKeys[invoice.number] = dbEncryptionKey;
 
-        // Create transaction instructions
-        const transferAmount = Math.round(invoice.amount * 1e6);
-
-        const transferIx = createTransferInstruction(
-          vaultAta,
-          receiverAta,
-          vaultPda,
-          BigInt(transferAmount),
-        );
-
-        // Create FIXED-LENGTH memo instruction (consistent size every time)
-        // This structure produces predictable SHA256 hash lengths and minimal memo size
+        // Create memo data
         const memoData = {
-          h: memoDataHash, // Always exactly 64 hex characters (SHA256 output)
-          v: '1.0', // Always exactly 5 characters (version identifier)
-          i: invoice.number, // Invoice number (business identifier)
+          h: memoDataHash,
+          v: '1.0',
+          i: invoice.number,
+          f: !feeCollected ? transactionFeeAmount : 0, // Include fee amount in memo for first invoice
         };
 
-        // Calculate and log exact memo size for verification and monitoring
         const memoString = JSON.stringify(memoData);
-        console.log('Essential memo data structure:', memoString);
-        console.log('Memo data size (characters):', memoString.length);
-        console.log('Hash length verification (should be 64):', memoDataHash.length);
-        console.log('Essential data used for hash generation:', essentialInvoiceData);
-        console.log('FileHashes field consistency check:', {
-          hasFiles: invoice.files?.length || 0,
-          hashArrayLength: fileHashes[invoice.number]?.length || 0,
-          alwaysPresent: 'fileHashes' in essentialInvoiceData.invoice,
-        });
+        console.log('Memo data structure:', memoString);
 
-        const memoIx = {
-          keys: [],
-          programId: new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'),
-          data: Buffer.from(memoString),
-        };
+        console.log('🔒 Creating secure payment transaction...');
 
-        // Get next transaction index
-        const currentTransactionIndex = Number(senderMultisigInfo.transactionIndex);
-        const newTransactionIndex = BigInt(currentTransactionIndex + 1);
-        console.log('Using transaction index:', newTransactionIndex.toString());
-
-        // Create transaction message for transfer
-        const transferMessage = new TransactionMessage({
-          payerKey: vaultPda,
-          recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
-          instructions: [transferIx, memoIx],
-        });
-
-        console.log('Compiling vault message...');
-        const compiledMessage = transactionMessageToVaultMessage({
-          message: transferMessage,
-          addressLookupTableAccounts: [],
-          vaultPda: vaultPda,
-        });
-
-        // Get transaction PDA for all operations
-        const [transactionPda] = getTransactionPda({
-          multisigPda: multisigAddress,
-          index: newTransactionIndex,
-        });
-
-        // Build the create, propose, and approve instructions
-        console.log('Creating transaction instructions...');
-        const createIx = instructions.vaultTransactionCreate({
-          multisigPda: multisigAddress,
-          transactionIndex: newTransactionIndex,
-          creator: new PublicKey(wallet.address),
-          vaultIndex: 0,
-          ephemeralSigners: 0,
-          transactionMessage: transferMessage,
-          memo: `TX-${invoice.number}`,
-        });
-
-        const proposeIx = instructions.proposalCreate({
-          multisigPda: multisigAddress,
-          transactionIndex: newTransactionIndex,
-          creator: new PublicKey(wallet.address),
-        });
-
-        const approveIx = instructions.proposalApprove({
-          multisigPda: multisigAddress,
-          transactionIndex: newTransactionIndex,
-          member: new PublicKey(wallet.address),
-        });
-
-        // Setup transactions
-        setStatus('confirming');
-
-        // Create the first transaction: Create
-        const createTx = new Transaction();
-        createTx.feePayer = new PublicKey(wallet.address);
-        createTx.add(createIx);
-
-        // Get recent blockhash for transaction
-        const latestBlockhash = await connection.getLatestBlockhash('confirmed');
-        createTx.recentBlockhash = latestBlockhash.blockhash;
-
-        // Add priority fee to transaction
-        const createTxWithFee = await solanaService.addPriorityFee(
-          createTx,
-          new PublicKey(wallet.address),
-          false,
-        );
-
-        console.log('Signing create transaction...');
-        const signedCreateTx = await wallet.signTransaction(createTxWithFee);
-
-        const createBase64Transaction = signedCreateTx.serialize().toString('base64');
-        console.log('Signed CREATE transaction (base64):', createBase64Transaction);
-
-        console.log('Sending create transaction...');
-        const createSignature = await connection.sendRawTransaction(signedCreateTx.serialize(), {
-          skipPreflight: true,
-          preflightCommitment: 'confirmed',
-          maxRetries: 3,
-        });
-
-        console.log('Create transaction sent with signature:', createSignature);
-
-        // Wait for confirmation
-        const createStatus = await solanaService.confirmTransactionWithRetry(
-          createSignature,
-          'confirmed',
-          10,
-          60000,
-          connection,
-        );
-
-        if (!createStatus || createStatus.err) {
-          throw new Error(
-            `Create transaction failed: ${createStatus ? JSON.stringify(createStatus.err) : 'No status returned'}`,
-          );
-        }
-
-        console.log('Create transaction confirmed. Waiting before next step...');
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-
-        // Create the second transaction: Propose + Approve
-        const proposeTx = new Transaction();
-        proposeTx.feePayer = new PublicKey(wallet.address);
-        proposeTx.add(proposeIx, approveIx);
-
-        // Get fresh blockhash
-        const proposeBlockhash = await connection.getLatestBlockhash('confirmed');
-        proposeTx.recentBlockhash = proposeBlockhash.blockhash;
-
-        // Add priority fee
-        const proposeTxWithFee = await solanaService.addPriorityFee(
-          proposeTx,
-          new PublicKey(wallet.address),
-          false,
-        );
-
-        console.log('Signing propose+approve transaction...');
-        const signedProposeTx = await wallet.signTransaction(proposeTxWithFee);
-
-        const proposeBase64Transaction = signedProposeTx.serialize().toString('base64');
-        console.log('Signed PROPOSE + APPROVE transaction (base64):', proposeBase64Transaction);
-
-        console.log('Sending propose+approve transaction...');
-        const proposeSignature = await connection.sendRawTransaction(signedProposeTx.serialize(), {
-          skipPreflight: true,
-          preflightCommitment: 'confirmed',
-          maxRetries: 3,
-        });
-
-        console.log('Propose+approve transaction sent with signature:', proposeSignature);
-
-        // Wait for confirmation
-        const proposeStatus = await solanaService.confirmTransactionWithRetry(
-          proposeSignature,
-          'confirmed',
-          10,
-          60000,
-          connection,
-        );
-
-        if (!proposeStatus || proposeStatus.err) {
-          throw new Error(
-            `Propose+approve transaction failed: ${proposeStatus ? JSON.stringify(proposeStatus.err) : 'No status returned'}`,
-          );
-        }
-
-        console.log('Propose+approve transaction confirmed. Waiting before execution...');
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-
-        console.log('Recomputing execution accounts with fresh state...');
-        // Create a fresh transfer message with current blockhash for execution
-        const executionTransferMessage = new TransactionMessage({
-          payerKey: vaultPda,
-          recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
-          instructions: [transferIx, memoIx],
-        });
-
-        const executionCompiledMessage = transactionMessageToVaultMessage({
-          message: executionTransferMessage,
-          addressLookupTableAccounts: [],
-          vaultPda: vaultPda,
-        });
-
-        // Get fresh execution accounts
-        const { accountMetas: freshAccountMetas } = await getAccountsForExecuteCore({
-          connection: connection,
-          multisigPda: multisigAddress,
-          message: executionCompiledMessage,
-          ephemeralSignerBumps: [0],
-          vaultIndex: 0,
-          transactionPda,
-          programId: PROGRAM_ID,
-        });
-
-        // Create execute instruction with fresh account metas
-        const { instruction: executeIx } = vaultTransactionExecuteSync({
-          multisigPda: multisigAddress,
-          transactionIndex: newTransactionIndex,
-          member: new PublicKey(wallet.address),
-          accountsForExecute: freshAccountMetas,
-          programId: PROGRAM_ID,
-        });
-
-        // Create the execution transaction
-        const executeTx = new Transaction();
-        executeTx.feePayer = new PublicKey(wallet.address);
-        executeTx.add(executeIx);
-
-        // Get fresh blockhash
-        const executeBlockhash = await connection.getLatestBlockhash('confirmed');
-        executeTx.recentBlockhash = executeBlockhash.blockhash;
-
-        // Add priority fee with standard compute units (should be sufficient with minimal memo)
-        const executeTxWithFee = await solanaService.addPriorityFee(
-          executeTx,
-          new PublicKey(wallet.address),
-          false,
-        );
-
-        console.log('Signing execute transaction...');
-        const signedExecuteTx = await wallet.signTransaction(executeTxWithFee);
-
-        const executeBase64Transaction = signedExecuteTx.serialize().toString('base64');
-        console.log('Signed EXECUTE transaction (base64):', executeBase64Transaction);
-
-        console.log('Sending execute transaction...');
-        const executeSignature = await connection.sendRawTransaction(signedExecuteTx.serialize(), {
-          skipPreflight: true,
-          preflightCommitment: 'confirmed',
-          maxRetries: 3,
-        });
-
-        console.log('Execute transaction sent with signature:', executeSignature);
-
-        // Wait for confirmation
-        const executeStatus = await solanaService.confirmTransactionWithRetry(
-          executeSignature,
-          'confirmed',
-          10,
-          60000,
-          connection,
-        );
-
-        if (!executeStatus || executeStatus.err) {
-          throw new Error(
-            `Execute transaction failed: ${executeStatus ? JSON.stringify(executeStatus.err) : 'No status returned'}`,
-          );
-        }
-
-        console.log('Execute transaction confirmed.');
-
-        // Store comprehensive transaction data in database
-        const transactionData = {
-          organization_id: organization.id,
-          signature: executeSignature,
-          token_mint: tokenMint.toString(),
-          proof_data: {
-            encryption_keys: {
-              [invoice.number]: encryptionKeys[invoice.number],
-            },
-            memo_hashes: {
-              [invoice.number]: memoHashes[invoice.number],
-            },
-            file_hashes: fileHashes,
-            comprehensive_encrypted_data: {
-              [invoice.number]: dbEncryptedData,
-            },
-            essential_data_used: {
-              [invoice.number]: essentialInvoiceData,
-            },
-          },
-          amount: invoice.amount,
-          transaction_type: 'payment' as const,
-          payment_method: dbPaymentMethod,
-          sender: {
-            multisig_address: multisigAddress.toString(),
-            vault_address: vaultPda.toString(),
-            wallet_address: wallet.address,
-          },
-          recipient: {
-            multisig_address: receiverMultisigPda.toString(),
-            vault_address: receiverVaultPda.toString(),
-          },
-          invoices: [
-            {
+        try {
+          // Step 1: Create transactions on backend with secure server wallet as fee payer
+          const createResponse = await paymentService.createPaymentTransaction({
+            organizationId: organization.id,
+            invoice: {
               number: invoice.number,
               amount: invoice.amount,
-              file_count: invoice.files?.length || 0,
+              index: invoiceIndex,
+              totalInvoices: vendorData.invoices.length,
             },
-          ],
-          status: 'confirmed',
-          restricted_payment_methods: [],
-          metadata: {
-            custom_fields: customFields,
-            payment_date: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
-            additional_info: vendorData.additionalInfo || '',
-            files_processed: fileHashes[invoice.number]?.length || 0,
-            memo_approach: 'essential_sha256_hash_consistent_structure',
-            memo_data_size: memoString.length,
-            memo_hash_length: memoDataHash.length,
-            data_structure_consistency: {
-              fileHashes_always_present: true,
-              essential_fields_count: Object.keys(essentialInvoiceData.invoice).length,
-              comprehensive_fields_count: Object.keys(comprehensiveInvoiceData).length,
+            tokenType: paymentData.tokenType as 'USDC' | 'USDT' | 'EURC',
+            vendorMultisigAddress: vendorApiData.multisigAddress,
+            transferMessage: {
+              payerKey: '', // Not used in backend, will be set to vault PDA
+              recentBlockhash: '',
+              instructions: [],
             },
-            // Store payment method details in metadata for reference
-            payment_method_details: {
-              frontend_selection: paymentData.paymentMethod,
-              database_value: dbPaymentMethod,
-              ...((paymentData.paymentMethod === 'ach' || paymentData.paymentMethod === 'wire') && {
-                account_details: {
-                  account_name: paymentData.accountName,
-                  account_type: paymentData.accountType,
-                  bank_name: paymentData.bankName,
-                  swift_code: paymentData.swiftCode,
-                },
-              }),
-              ...((paymentData.paymentMethod === 'credit_card' ||
-                paymentData.paymentMethod === 'debit_card') && {
-                card_details: {
-                  billing_name: paymentData.billingName,
-                  billing_address: {
-                    address: paymentData.billingAddress,
-                    city: paymentData.billingCity,
-                    state: paymentData.billingState,
-                    zip: paymentData.billingZip,
+            memo: memoString,
+            includeTransactionFee: !feeCollected,
+          });
+
+          console.log('✅ Backend created transactions:', {
+            transactionIndex: createResponse.transactionIndex,
+            multisigAddress: createResponse.multisigAddress,
+            vaultAddress: createResponse.vaultAddress,
+          });
+
+          // Step 2: User signs CREATE transaction
+          console.log('👤 User signing CREATE transaction...');
+          const createTxBuffer = Buffer.from(createResponse.createTransaction, 'base64');
+          const createTx = VersionedTransaction.deserialize(createTxBuffer);
+          const signedCreateTx = await wallet.signTransaction(createTx);
+
+          // Step 3: Submit CREATE transaction to backend for server wallet signing
+          console.log('📤 Submitting CREATE transaction to backend...');
+          const createResult = await paymentService.submitSignedTransaction({
+            serializedTransaction: Buffer.from(signedCreateTx.serialize()).toString('base64'),
+            expectedFeeAmount: 15,
+            tokenMint: tokenMint.toString(),
+            organizationId: organization.id,
+            feeCollectionSignature: 'integrated-in-main-transaction',
+          });
+
+          console.log('✅ CREATE transaction completed:', createResult.signature);
+
+          // Wait before next transaction
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+
+          // Step 4: User signs PROPOSE + APPROVE transaction
+          console.log('👤 User signing PROPOSE + APPROVE transaction...');
+          const proposeTxBuffer = Buffer.from(createResponse.proposeTransaction, 'base64');
+          const proposeTx = VersionedTransaction.deserialize(proposeTxBuffer);
+          const signedProposeTx = await wallet.signTransaction(proposeTx);
+
+          // Step 5: Submit PROPOSE + APPROVE transaction to backend
+          console.log('📤 Submitting PROPOSE + APPROVE transaction to backend...');
+          const proposeResult = await paymentService.submitSignedTransaction({
+            serializedTransaction: Buffer.from(signedProposeTx.serialize()).toString('base64'),
+            expectedFeeAmount: 15,
+            tokenMint: tokenMint.toString(),
+            organizationId: organization.id,
+            feeCollectionSignature: 'integrated-in-main-transaction',
+          });
+
+          console.log('✅ PROPOSE + APPROVE transaction completed:', proposeResult.signature);
+
+          // Wait before execution
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+
+          // Step 6: User signs EXECUTE transaction
+          console.log('👤 User signing EXECUTE transaction...');
+          const executeTxBuffer = Buffer.from(createResponse.executeTransaction, 'base64');
+          const executeTx = VersionedTransaction.deserialize(executeTxBuffer);
+          const signedExecuteTx = await wallet.signTransaction(executeTx);
+
+          // Step 7: Submit EXECUTE transaction to backend
+          console.log('📤 Submitting EXECUTE transaction to backend...');
+          const executeResult = await paymentService.submitSignedTransaction({
+            serializedTransaction: Buffer.from(signedExecuteTx.serialize()).toString('base64'),
+            expectedFeeAmount: 15,
+            tokenMint: tokenMint.toString(),
+            organizationId: organization.id,
+            feeCollectionSignature: 'integrated-in-main-transaction',
+          });
+
+          console.log('✅ EXECUTE transaction completed:', executeResult.signature);
+
+          // Mark fee as collected after first invoice
+          if (!feeCollected) {
+            feeCollected = true;
+          }
+
+          // Store comprehensive transaction data in database
+          const transactionData = {
+            organization_id: organization.id,
+            signature: executeResult.signature,
+            token_mint: tokenMint.toString(),
+            proof_data: {
+              encryption_keys: {
+                [invoice.number]: encryptionKeys[invoice.number],
+              },
+              memo_hashes: {
+                [invoice.number]: memoHashes[invoice.number],
+              },
+              file_hashes: fileHashes,
+              comprehensive_encrypted_data: {
+                [invoice.number]: dbEncryptedData,
+              },
+              essential_data_used: {
+                [invoice.number]: essentialInvoiceData,
+              },
+            },
+            amount: invoice.amount,
+            transaction_type: 'payment' as const,
+            payment_method: dbPaymentMethod,
+            sender: {
+              multisig_address: multisigAddress.toString(),
+              vault_address: createResponse.vaultAddress,
+              wallet_address: wallet.address,
+            },
+            recipient: {
+              multisig_address: vendorApiData.multisigAddress,
+              vault_address: '', // Will be calculated by backend
+            },
+            invoices: [
+              {
+                number: invoice.number,
+                amount: invoice.amount,
+                file_count: invoice.files?.length || 0,
+              },
+            ],
+            status: 'confirmed',
+            restricted_payment_methods: [],
+            metadata: {
+              custom_fields: customFields,
+              payment_date: vendorData.paymentDate?.toISOString() || new Date().toISOString(),
+              additional_info: vendorData.additionalInfo || '',
+              files_processed: fileHashes[invoice.number]?.length || 0,
+              memo_approach: 'essential_sha256_hash_consistent_structure',
+              memo_data_size: memoString.length,
+              memo_hash_length: memoDataHash.length,
+              fee_collection_approach: 'integrated_in_main_transaction',
+              fee_amount: invoiceIndex === 0 ? transactionFeeAmount : 0,
+              onramp_fee: paymentData.onrampFee,
+              secure_backend_flow: true,
+              invoice_index: invoiceIndex,
+              total_invoices: vendorData.invoices.length,
+              data_structure_consistency: {
+                fileHashes_always_present: true,
+                essential_fields_count: Object.keys(essentialInvoiceData.invoice).length,
+                comprehensive_fields_count: Object.keys(comprehensiveInvoiceData).length,
+              },
+              payment_method_details: {
+                frontend_selection: paymentData.paymentMethod,
+                database_value: dbPaymentMethod,
+                requires_onramp: requiresOnramp,
+                ...((paymentData.paymentMethod === 'ach' ||
+                  paymentData.paymentMethod === 'wire') && {
+                  account_details: {
+                    account_name: paymentData.accountName,
+                    account_type: paymentData.accountType,
+                    bank_name: paymentData.bankName,
+                    swift_code: paymentData.swiftCode,
                   },
-                },
-              }),
+                }),
+                ...((paymentData.paymentMethod === 'credit_card' ||
+                  paymentData.paymentMethod === 'debit_card') && {
+                  card_details: {
+                    billing_name: paymentData.billingName,
+                    billing_address: {
+                      address: paymentData.billingAddress,
+                      city: paymentData.billingCity,
+                      state: paymentData.billingState,
+                      zip: paymentData.billingZip,
+                    },
+                  },
+                }),
+              },
             },
-          },
-          // Include recipient organization information for proper database storage
-          recipient_organization_id: recipientOrganizationId,
-          recipient_name: recipientName,
-        };
+            recipient_organization_id: recipientOrganizationId,
+            recipient_name: recipientName,
+          };
 
-        // Store the transaction using the transaction API service
-        console.log('Storing transaction with payment method:', {
-          senderOrgId: organization.id,
-          recipientOrgId: recipientOrganizationId,
-          signature: executeSignature,
-          amount: invoice.amount,
-          paymentMethod: dbPaymentMethod,
-        });
+          // Store the transaction using the transaction API service
+          console.log('💾 Storing transaction with secure backend flow:', {
+            senderOrgId: organization.id,
+            recipientOrgId: recipientOrganizationId,
+            signature: executeResult.signature,
+            amount: invoice.amount,
+            paymentMethod: dbPaymentMethod,
+            feeCollectedWithThisInvoice: invoiceIndex === 0,
+            onrampFee: paymentData.onrampFee,
+            secureBackendFlow: true,
+          });
 
-        await transactionApi.storeTransaction(transactionData);
+          await transactionApi.storeTransaction(transactionData);
 
-        console.log('Transaction stored successfully with payment method:', dbPaymentMethod);
+          console.log('✅ Transaction stored successfully with secure backend flow');
+        } catch (invoiceError) {
+          console.error(`❌ Error processing invoice ${invoice.number}:`, invoiceError);
+          throw invoiceError;
+        }
       }
 
       // Set status to confirmed after processing all invoices
       setStatus('confirmed');
+      console.log('🎉 All transactions completed successfully using secure backend flow');
     } catch (error) {
-      console.error('Transaction failed:', error);
+      console.error('❌ Transaction failed:', error);
       toast.error(error instanceof Error ? error.message : 'Transaction failed');
       setStatus('initial');
+      onTransactionStatusChange(false);
     } finally {
       setIsProcessing(false);
     }
@@ -691,14 +499,21 @@ export function TransactionConfirmation({
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 space-y-4">
-        <div className="space-y-4 pb-0">
-          <h2 className="text-lg font-semibold">Vendor & Invoice Details</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {/* Vendor Card */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold mb-4">Payment Details</h2>
+          {/* <div className="grid grid-cols-2 gap-4 pb-3">
+            <div>
+              <div className="flex justify-start gap-2">
+                <p className="font-medium text-sm">Payment Date:</p>
+                <span className="text-gray-600">
+                  <p className="text-sm">{vendorData.paymentDate.toLocaleDateString()}</p>{' '}
+                </span>
+              </div>
+            </div>
             <div className="flex flex-col">
-              <p className="font-medium text-sm pb-2">Vendor</p>
-              <Card className="bg-muted/50 rounded-md p-0">
-                <CardContent className="p-4">
+              <p className="font-medium text-sm pb-2">Receiver</p>
+              <Card className="bg-white rounded-sm p-0 w-[100%]">
+                <CardContent className="px-4 py-2">
                   {!vendorData?.receiverDetails ? (
                     <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
                       Vendor details not available
@@ -717,143 +532,340 @@ export function TransactionConfirmation({
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </Card>{' '}
             </div>
+          </div> */}
 
-            {/* Invoices */}
-            <div>
-              <div className="flex justify-between">
-                <p className="font-medium text-sm mb-2">Invoices</p>
-              </div>
-              <div className="space-y-2">
-                {vendorData?.invoices.map((invoice: Invoice, index: number) => (
-                  <Card key={index} className="bg-muted/50 rounded-md">
-                    <CardContent className="flex w-full justify-between items-center h-full m-0 px-4 py-2 text-xs">
-                      <div className="flex items-center">
-                        <p>#{invoice.number}</p>
-                        {invoice.files && invoice.files.length > 0 && (
-                          <span className="ml-2 text-xs text-blue-500">
-                            ({invoice.files.length} file{invoice.files.length !== 1 ? 's' : ''})
-                          </span>
-                        )}
-                      </div>
-                      <p>
-                        {invoice.amount} {paymentData.tokenType}
-                      </p>
+          <div className="px-0">
+            <div className="flex justify-between items-start gap-4">
+              <div className="flex flex-col w-[45%] gap-2">
+                <div className="text-sm flex">
+                  <p className="font-medium text-gray-900">Receiver</p>{' '}
+                </div>
+                <div className="text-sm flex w-[100%]">
+                  <Card className="bg-white rounded-sm p-0 w-[100%]">
+                    <CardContent className="p-4">
+                      {!vendorData?.receiverDetails ? (
+                        <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
+                          Vendor details not available
+                        </div>
+                      ) : (
+                        <div className="p-0 m-0">
+                          <h4 className="font-semibold text-sm">
+                            {vendorData.receiverDetails?.name || 'Unknown Vendor'}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            Address: {vendorData.receiverDetails?.primary_address || 'NA'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Phone: {vendorData.receiverDetails?.business_details?.phone || 'NA'}
+                          </p>
+                        </div>
+                      )}
                     </CardContent>
-                  </Card>
-                ))}
+                  </Card>{' '}
+                </div>
+              </div>
+
+              <div className="flex flex-col w-[50%] gap-2">
+                <p className="font-medium text-sm">Invoices</p>
+
+                {/* Invoice Table */}
+                <div className="bg-transparent overflow-hidden">
+                  {/* Header */}
+                  <div className="bg-transparent pr-4 pb-2">
+                    <div className="grid grid-cols-12 gap-4 text-xs font-normal text-gray-600">
+                      <div className="col-span-3">Invoice #</div>
+                      <div className="col-span-6 ml-3">Attachment(s)</div>
+                      <div className="col-span-3 text-right">Amount</div>
+                    </div>
+                  </div>
+
+                  {/* Invoice Rows */}
+                  {vendorData?.invoices.map((invoice: Invoice, index: number) => (
+                    <div
+                      rounded-sm
+                      p-0
+                      key={index}
+                      className="bg-white rounded-sm border-gray-200 shadow-sm border mb-2  px-4 py-3"
+                    >
+                      <div className="grid grid-cols-12 gap-4 text-xs">
+                        {/* Invoice Number */}
+                        <div className="col-span-3 font-medium text-gray-900">{invoice.number}</div>
+
+                        {/* Files */}
+                        <div className="col-span-6">
+                          {invoice.files && invoice.files.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {invoice.files.map((file, fileIndex) => (
+                                <span
+                                  key={fileIndex}
+                                  className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-500 cursor-pointer text-xs"
+                                >
+                                  {file.name}
+                                  <svg
+                                    className="w-3 h-3"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    />
+                                  </svg>
+                                  {fileIndex < (invoice.files?.length || 0) - 1 && (
+                                    <span className="text-gray-400">,</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">-</span>
+                          )}
+                        </div>
+
+                        {/* Amount */}
+                        <div className="col-span-3 text-right font-semibold text-gray-900 text-xs">
+                          {invoice.amount.toFixed(2)} {paymentData.tokenType}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Dynamic Custom Fields Display */}
+                  {Object.entries(extractCustomFields(vendorData)).length > 0 && (
+                    <div className="grid grid-cols-2 gap-4">
+                      {Object.entries(extractCustomFields(vendorData)).map(([key, value]) => {
+                        const formattedKey = key
+                          .replace(/([A-Z])/g, ' $1')
+                          .replace(/_/g, ' ')
+                          .replace(/^./, (str) => str.toUpperCase());
+
+                        return (
+                          <div key={key}>
+                            <p className="font-medium text-xs mb-2">{formattedKey}</p>
+                            <p className="text-xs text-muted-foreground">{String(value)}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Additional Info */}
+                  {vendorData.additionalInfo && (
+                    <div>
+                      <p className="font-medium text-sm mb-2">Additional Notes</p>
+                      <p className="text-sm text-muted-foreground">{vendorData.additionalInfo}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* <div className="flex flex-col w-[50%] gap-2 justify-start items-end">
+                <p className="text-sm font-medium">Payment Date</p>
+
+                <div className="relative w-[25%]">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+
+                  <div className=" text-right w-full px-3 py-2 text-sm border border-slate-300 rounded-sm bg-slate-100 text-slate-400 cursor-not-allowed shadow-sm">
+                    {vendorData.paymentDate.toISOString().split('T')[0]}
+                  </div>
+                </div>
+
+                <span className="text-gray-600">
+                  <p className="text-sm">{vendorData.paymentDate.toLocaleDateString()}</p>{' '}
+                </span>
+              </div> */}
+            </div>
+          </div>
+
+          {/* Summary Section */}
+          {/* <div className="pt-3">
+            <p className="font-medium text-sm">Invoices</p>
+
+            <div className="bg-transparent overflow-hidden">
+              <div className="bg-transparent pr-4 py-2">
+                <div className="grid grid-cols-12 gap-4 text-xs font-normal text-gray-600">
+                  <div className="col-span-3">Invoice #</div>
+                  <div className="col-span-6 ml-3">Attached File(s)</div>
+                  <div className="col-span-3 text-right">Amount</div>
+                </div>
+              </div>
+
+              {vendorData?.invoices.map((invoice: Invoice, index: number) => (
+                <div
+                  rounded-sm
+                  p-0
+                  key={index}
+                  className="bg-white rounded-sm border-gray-200 shadow-sm border mb-2  px-4 py-3"
+                >
+                  <div className="grid grid-cols-12 gap-4 text-xs">
+                    <div className="col-span-3 font-medium text-gray-900">{invoice.number}</div>
+
+                    <div className="col-span-6">
+                      {invoice.files && invoice.files.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {invoice.files.map((file, fileIndex) => (
+                            <span
+                              key={fileIndex}
+                              className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-500 cursor-pointer text-xs"
+                            >
+                              {file.name}
+                              <svg
+                                className="w-3 h-3"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                              </svg>
+                              {fileIndex < (invoice.files?.length || 0) - 1 && (
+                                <span className="text-gray-400">,</span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </div>
+
+                    <div className="col-span-3 text-right font-semibold text-gray-900 text-xs">
+                      {invoice.amount.toFixed(2)} {paymentData.tokenType}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {Object.entries(extractCustomFields(vendorData)).length > 0 && (
+                <div className="grid grid-cols-2 gap-4">
+                  {Object.entries(extractCustomFields(vendorData)).map(([key, value]) => {
+                    const formattedKey = key
+                      .replace(/([A-Z])/g, ' $1')
+                      .replace(/_/g, ' ')
+                      .replace(/^./, (str) => str.toUpperCase());
+
+                    return (
+                      <div key={key}>
+                        <p className="font-medium text-xs mb-2">{formattedKey}</p>
+                        <p className="text-xs text-muted-foreground">{String(value)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {vendorData.additionalInfo && (
+                <div>
+                  <p className="font-medium text-sm mb-2">Additional Notes</p>
+                  <p className="text-sm text-muted-foreground">{vendorData.additionalInfo}</p>
+                </div>
+              )}
+            </div>
+          </div> */}
+        </div>
+
+        {/* Summary Rows */}
+        <div className="p-0 m-0">
+          {/* Subtotal */}
+          <div className="px-0 pb-1 gap-2 flex justify-between items-center">
+            <span className="text-xs  text-slate-500">Subtotal</span>
+            <span className="text-xs   text-slate-500">
+              {subtotal.toFixed(2)} {paymentData.tokenType}
+            </span>
+          </div>
+
+          {/* Transaction Fee */}
+          <div className="px-0 py-1 gap-2 flex justify-between items-center">
+            <span className="text-xs text-slate-500">Transaction Fee</span>
+            <span className="text-xs text-slate-500">
+              {transactionFee.toFixed(2)} {paymentData.tokenType}
+            </span>
+          </div>
+
+          {/* Instant Onramp Fee - Only show if payment method requires onramp */}
+          {requiresOnramp && onrampFeeAmount > 0 && (
+            <div className="px-0 py-1 gap-2 flex justify-between items-center">
+              <span className="text-xs text-slate-500">Instant Onramp Fee</span>
+              <span className="text-xs  text-slate-500">
+                {onrampFeeAmount.toFixed(2)} {paymentData.tokenType}
+              </span>
+            </div>
+          )}
+          {/* Total */}
+          <div className="px-0 pt-1">
+            <div className="flex justify-between items-center">
+              <div className="text-sm ">
+                <span className="font-medium text-gray-900">Total {'    '}</span>
+              </div>
+              <div className="text-sm">
+                <div>
+                  <span className="font-medium text-gray-900">
+                    {total.toFixed(2)} {'    '}
+                    {paymentData.tokenType}
+                  </span>
+                </div>
               </div>
             </div>
-
-            {/* Dynamic Custom Fields Display */}
-            {Object.entries(extractCustomFields(vendorData)).map(([key, value]) => {
-              const formattedKey = key
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/_/g, ' ')
-                .replace(/^./, (str) => str.toUpperCase());
-
-              return (
-                <div key={key}>
-                  <p className="font-medium text-xs mb-2">{formattedKey}</p>
-                  <p className="text-xs text-muted-foreground">{String(value)}</p>
-                </div>
-              );
-            })}
-
-            {/* Payment Date */}
-            {vendorData.paymentDate && (
-              <div>
-                <p className="font-medium text-xs mb-2">Payment Date</p>
-                <p className="text-xs text-muted-foreground">
-                  {vendorData.paymentDate.toLocaleDateString()}
-                </p>
-              </div>
-            )}
-
-            {/* Additional Info */}
-            {vendorData.additionalInfo && (
-              <div>
-                <p className="font-medium text-xs mb-2">Additional Notes</p>
-                <p className="text-xs text-muted-foreground">{vendorData.additionalInfo}</p>
-              </div>
-            )}
           </div>
         </div>
 
-        <Separator />
-
-        {/* Payment Details Section */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Payment Details</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="font-medium text-sm mb-2">Payment Method</p>
-              <p className="text-sm text-muted-foreground">
-                {formatPaymentMethod(paymentData.paymentMethod)}
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-sm mb-2 justify-end text-end w-full">Total Amount</p>
-              <p className="text-sm text-muted-foreground justify-end text-end w-full">
-                {vendorData.totalAmount?.toFixed(2)} {paymentData.tokenType}
-              </p>
+        <div className="px-0 py-3 border-y">
+          <div className="flex justify-between items-center">
+            <div className="text-sm flex flex-col gap-2">
+              <span className="font-medium text-gray-900">Payment Method</span>{' '}
+              <span className="text-gray-600">
+                <p className="text-sm">
+                  {' '}
+                  {formatPaymentMethodDisplay(paymentData.paymentMethod)}
+                </p>{' '}
+              </span>
             </div>
 
-            {/* Conditionally show payment method details */}
-            {paymentData.paymentMethod === 'ach' && (
-              <>
-                <div>
-                  <p className="font-medium text-sm">Account Name</p>
-                  <p className="text-sm text-muted-foreground">{paymentData.accountName}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Account Type</p>
-                  <p className="text-sm text-muted-foreground">{paymentData.accountType}</p>
-                </div>
-              </>
-            )}
+            <div className="flex flex-col gap-2 justify-start items-end">
+              <p className="text-sm font-medium">Payment Date</p>
 
-            {paymentData.paymentMethod === 'wire' && (
-              <>
-                <div>
-                  <p className="font-medium text-sm">Bank Name</p>
-                  <p className="text-sm text-muted-foreground">{paymentData.bankName}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Swift Code</p>
-                  <p className="text-sm text-muted-foreground">
-                    {paymentData.swiftCode || 'Not provided'}
-                  </p>
-                </div>
-              </>
-            )}
+              {/* <div className="relative w-[25%]">
+                  <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
 
-            {(paymentData.paymentMethod === 'credit_card' ||
-              paymentData.paymentMethod === 'debit_card') && (
-              <>
-                <div>
-                  <p className="font-medium text-sm">Card Holder</p>
-                  <p className="text-sm text-muted-foreground">{paymentData.billingName}</p>
+                  <div className=" text-right w-full px-3 py-2 text-sm border border-slate-300 rounded-sm bg-slate-100 text-slate-400 cursor-not-allowed shadow-sm">
+                    {vendorData.paymentDate.toISOString().split('T')[0]}
+                  </div>
+                </div> */}
+
+              <span className="text-gray-600">
+                <p className="text-sm">{vendorData.paymentDate.toLocaleDateString()}</p>{' '}
+              </span>
+            </div>
+            {/* <div className="text-sm">
+              <span className="text-gray-600">
+                {formatPaymentMethodDisplay(paymentData.paymentMethod)}
+              </span>
+
+              <div className="relative">
+                <div className=" text-right w-full px-3 py-2 text-sm border border-slate-200 rounded-sm bg-white text-slate-900 cursor-not-allowed shadow-sm">
+                  {formatPaymentMethodDisplay(paymentData.paymentMethod)}
                 </div>
-                <div>
-                  <p className="font-medium text-sm">Billing Address</p>
-                  <p className="text-sm text-muted-foreground">
-                    {paymentData.billingAddress}, {paymentData.billingCity},{' '}
-                    {paymentData.billingState} {paymentData.billingZip}
-                  </p>
-                </div>
-              </>
-            )}
+              </div>
+
+             
+            </div> */}
           </div>
         </div>
 
-        <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-800 border-blue-100 border-[1px]">
+        <div className="rounded-sm bg-blue-50 p-4 text-sm text-blue-800 border-blue-100 border-[1px]">
           <p>
-            By confirming this transaction, you authorize the transfer of{' '}
-            {vendorData.totalAmount?.toFixed(2)} {paymentData.tokenType} from your business wallet
-            to {vendorData.receiverDetails?.name || 'the vendor'} using{' '}
-            {formatPaymentMethod(paymentData.paymentMethod)}.
+            By confirming this transaction, you authorize a payment of {subtotal.toFixed(2)}{' '}
+            {paymentData.tokenType} to {vendorData.receiverDetails?.name || 'the vendor'} on{' '}
+            {vendorData.paymentDate.toLocaleDateString()}.
           </p>
         </div>
       </div>
@@ -873,7 +885,7 @@ export function TransactionConfirmation({
             className="flex-1"
             disabled={isProcessing || !wallet || !organization}
           >
-            {isProcessing ? 'Processing...' : 'Confirm & Submit'}
+            {isProcessing ? 'Processing...' : 'Confirm & Pay'}
           </Button>
         </div>
       </div>

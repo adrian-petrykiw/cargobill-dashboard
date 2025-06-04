@@ -8,6 +8,20 @@ import type {
 } from '@/schemas/transaction.schema';
 import type { ApiResponse } from '@/types/api/responses';
 
+export interface SponsoredTransactionRequest {
+  serializedTransaction: string;
+  expectedFeeAmount: number;
+  tokenMint: string;
+  organizationId: string;
+  feeCollectionSignature: string;
+}
+
+export interface SponsoredTransactionResponse {
+  signature: string;
+  message: string;
+  feeCollectionSignature: string;
+}
+
 export const transactionApi = {
   // Store a new transaction after blockchain execution
   async storeTransaction(transactionData: StoreTransactionData): Promise<Transaction> {
@@ -46,6 +60,52 @@ export const transactionApi = {
         throw new Error(error.response.data.error.message);
       }
       throw new Error('Failed to store transaction. Please try again later.');
+    }
+  },
+
+  // Submit sponsored transaction (with integrated fee collection)
+  async submitSponsoredTransaction(
+    request: SponsoredTransactionRequest,
+  ): Promise<SponsoredTransactionResponse> {
+    try {
+      const isIntegratedFee = request.feeCollectionSignature === 'integrated-in-main-transaction';
+
+      console.log('Submitting sponsored transaction:', {
+        expectedFeeAmount: request.expectedFeeAmount,
+        tokenMint: request.tokenMint,
+        organizationId: request.organizationId,
+        feeApproach: isIntegratedFee ? 'integrated' : 'legacy_separate',
+        feeCollectionSignature: isIntegratedFee
+          ? 'integrated'
+          : request.feeCollectionSignature.substring(0, 8) + '...',
+      });
+
+      const { data } = await axios.post<ApiResponse<SponsoredTransactionResponse>>(
+        '/api/transactions/sponsor',
+        request,
+      );
+
+      console.log('Sponsored transaction API response:', {
+        success: data.success,
+        hasData: !!data.data,
+      });
+
+      if (!data.success) {
+        throw new Error(data.error?.message || 'Failed to complete sponsored transaction');
+      }
+
+      if (!data.data) {
+        throw new Error('No sponsored transaction data returned from server');
+      }
+
+      console.log('Sponsored transaction completed successfully:', data.data.signature);
+      return data.data;
+    } catch (error) {
+      console.error('Error submitting sponsored transaction:', error);
+      if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+        throw new Error(error.response.data.error.message);
+      }
+      throw new Error('Failed to complete sponsored transaction. Please try again later.');
     }
   },
 

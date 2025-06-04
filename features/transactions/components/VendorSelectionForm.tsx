@@ -408,7 +408,7 @@ export function VendorSelectionForm({
 
                   {fields.map((field, index) => (
                     <div key={field.id} className="space-y-2">
-                      <div className="flex gap-4 w-full items-center">
+                      <div className="flex gap-4 w-full items-start">
                         <FormField
                           control={form.control as any}
                           name={`invoices.${index}.number`}
@@ -556,7 +556,7 @@ export function VendorSelectionForm({
                               type="date"
                               value={field.value.toISOString().split('T')[0]}
                               disabled
-                              className="border-slate-400 text-slate-700 bg-slate-300 cursor-not-allowed"
+                              className="border-slate-400 text-slate-700 bg-slate-200 cursor-not-allowed"
                             />
                             <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                           </div>
@@ -567,14 +567,14 @@ export function VendorSelectionForm({
                   />
 
                   <div className="space-y-2">
-                    <FormLabel className="text-end flex justify-end">
+                    <FormLabel className="text-end flex justify-start">
                       Total Amount ({form.watch('tokenType')})
                     </FormLabel>
                     <Input
                       type="number"
                       value={totalAmount.toFixed(2)}
                       disabled
-                      className="border-slate-400 text-slate-700 bg-slate-300 cursor-not-allowed text-end  px-0"
+                      className="border-slate-400 text-slate-700 bg-slate-200 cursor-not-allowed text-start"
                     />
                   </div>
                 </div>

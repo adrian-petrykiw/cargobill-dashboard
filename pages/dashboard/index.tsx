@@ -141,12 +141,31 @@ export default function Dashboard() {
             </Button>
             <Button
               className="min-w-[12rem] bg-slate-900 text-white hover:bg-slate-800"
-              onClick={() => {
-                toast.error(`Please complete business verification`, {
-                  duration: 3000,
-                  position: 'top-center',
-                  icon: '🔒',
-                });
+              onClick={(e) => {
+                if (!isBusinessVerified) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toast.error('Please complete business verification', {
+                    duration: 3000,
+                    position: 'top-center',
+                    icon: '🔒',
+                  });
+                  return;
+                } else if (!isWalletReady) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toast.error('Wallet not connected', {
+                    duration: 3000,
+                    position: 'top-center',
+                  });
+                  return;
+                } else {
+                  // handleOpenModal();
+                  toast.error('Contact support to unlock requests', {
+                    duration: 3000,
+                    position: 'top-center',
+                  });
+                }
               }}
             >
               Request

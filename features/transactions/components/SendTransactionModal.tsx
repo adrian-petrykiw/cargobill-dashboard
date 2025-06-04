@@ -11,17 +11,24 @@ import { VendorSelectionForm } from './VendorSelectionForm';
 import { TransactionConfirmation } from './TransactionConfirmation';
 import { EnrichedVendorFormValues, PaymentDetailsFormValues } from '@/schemas/vendor.schema';
 import { useVendorSelection } from '@/hooks/useVendorSelection';
-import { PaymentDetailsForm } from './ PaymentDetailsForm';
+import { PaymentDetailsForm } from './PaymentDetailsForm';
+import { toast } from 'react-hot-toast';
 
 interface SendTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// Extended payment data to include onramp fee
+interface ExtendedPaymentFormValues extends PaymentDetailsFormValues {
+  onrampFee: number;
+}
+
 export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalProps) {
   const [step, setStep] = useState(0);
   const [vendorFormData, setVendorFormData] = useState<EnrichedVendorFormValues | null>(null);
-  const [paymentFormData, setPaymentFormData] = useState<PaymentDetailsFormValues | null>(null);
+  const [paymentFormData, setPaymentFormData] = useState<ExtendedPaymentFormValues | null>(null);
+  const [isTransactionProcessing, setIsTransactionProcessing] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { organization } = useOrganizations();
@@ -47,10 +54,22 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
   }, [isOpen, refetchVendors]);
 
   const handleClose = () => {
+    // Prevent closing if on confirmation step or transaction is processing
+    if (step === 2) {
+      toast.error('Cannot close during confirmation step');
+      return;
+    }
+
+    if (isTransactionProcessing) {
+      toast.error('Transaction in progress');
+      return;
+    }
+
     onClose();
     setStep(0);
     setVendorFormData(null);
     setPaymentFormData(null);
+    setIsTransactionProcessing(false);
   };
 
   const handleTransactionComplete = async (): Promise<void> => {
@@ -77,11 +96,19 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Reset modal state and close
-      handleClose();
+      onClose();
+      setStep(0);
+      setVendorFormData(null);
+      setPaymentFormData(null);
+      setIsTransactionProcessing(false);
     } catch (error) {
       console.error('Error completing transaction cleanup:', error);
       // Still close the modal even if there's an error with cache invalidation
-      handleClose();
+      onClose();
+      setStep(0);
+      setVendorFormData(null);
+      setPaymentFormData(null);
+      setIsTransactionProcessing(false);
     }
   };
 
@@ -91,8 +118,8 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
     setStep(1);
   };
 
-  const handlePaymentSubmit = (data: PaymentDetailsFormValues) => {
-    console.log('Payment Data:', data);
+  const handlePaymentSubmit = (data: ExtendedPaymentFormValues) => {
+    console.log('Payment Data with onramp fee:', data);
     setPaymentFormData(data);
     setStep(2);
   };
@@ -138,6 +165,7 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
             paymentData={paymentFormData}
             wallet={embeddedWallet}
             organization={organization}
+            onTransactionStatusChange={setIsTransactionProcessing}
           />
         ) : null,
     },
@@ -147,6 +175,8 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
     step < steps.length - 1
       ? ((step + 1) / steps.length) * 100 - 5
       : ((step + 1) / steps.length) * 100;
+
+  const canClose = step !== 2 && !isTransactionProcessing;
 
   return (
     <Dialog
@@ -160,10 +190,14 @@ export function SendTransactionModal({ isOpen, onClose }: SendTransactionModalPr
       <DialogContent
         className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col"
         onPointerDownOutside={(e) => {
-          e.preventDefault();
+          if (!canClose) {
+            e.preventDefault();
+          }
         }}
         onEscapeKeyDown={(e) => {
-          e.preventDefault();
+          if (!canClose) {
+            e.preventDefault();
+          }
         }}
       >
         <div className="p-6 pb-0">

@@ -302,7 +302,7 @@ export function DepositModal({ tokenBalances }: DepositModalProps) {
               )}
             </div>
 
-            <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+            <div className="rounded-lg border-[1px] border-gray-300 bg-muted p-4 text-sm text-muted-foreground">
               <p>
                 This will deposit {selectedToken} to your business wallet using your linked payment
                 method

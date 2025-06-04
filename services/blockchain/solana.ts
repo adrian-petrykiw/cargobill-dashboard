@@ -9,6 +9,8 @@ import {
   SignatureStatus,
   ComputeBudgetProgram,
   TransactionMessage,
+  TransactionInstruction,
+  AddressLookupTableAccount,
 } from '@solana/web3.js';
 import { getAccount, TokenAccountNotFoundError, Account } from '@solana/spl-token';
 import bs58 from 'bs58';
@@ -390,6 +392,188 @@ export class SolanaService {
     transaction.instructions.forEach((ix) => modifiedTx.add(ix));
 
     return modifiedTx;
+  }
+
+  /**
+   * Add priority fee to a VersionedTransaction
+   * This method creates a new VersionedTransaction with compute budget instructions
+   */
+  async addPriorityFeeToVersionedTransaction(
+    versionedTransaction: VersionedTransaction,
+    feePayer: PublicKey,
+    isAtomic: boolean = false,
+  ): Promise<VersionedTransaction> {
+    try {
+      console.log('Adding priority fee to VersionedTransaction');
+
+      // Extract the message from the versioned transaction
+      const message = versionedTransaction.message;
+
+      // Get the account keys (including lookup table accounts if any)
+      const accountKeys = message.getAccountKeys();
+
+      // Extract instructions from the message
+      const instructions: TransactionInstruction[] = [];
+
+      // Convert compiled instructions back to TransactionInstruction format
+      for (const compiledIx of message.compiledInstructions) {
+        const programId = accountKeys.get(compiledIx.programIdIndex);
+        if (!programId) {
+          throw new Error(
+            `Program ID not found for instruction at index ${compiledIx.programIdIndex}`,
+          );
+        }
+
+        const keys = compiledIx.accountKeyIndexes.map((keyIndex) => {
+          const pubkey = accountKeys.get(keyIndex);
+          if (!pubkey) {
+            throw new Error(`Account key not found at index ${keyIndex}`);
+          }
+
+          // Determine if this account is a signer or writable based on the message header
+          const isWritable =
+            keyIndex <
+            message.header.numRequiredSignatures +
+              message.header.numReadonlySignedAccounts +
+              (message.staticAccountKeys.length -
+                message.header.numRequiredSignatures -
+                message.header.numReadonlyUnsignedAccounts);
+          const isSigner = keyIndex < message.header.numRequiredSignatures;
+
+          return {
+            pubkey,
+            isSigner,
+            isWritable,
+          };
+        });
+
+        instructions.push(
+          new TransactionInstruction({
+            programId,
+            keys,
+            data: Buffer.from(compiledIx.data),
+          }),
+        );
+      }
+
+      console.log(`Extracted ${instructions.length} instructions from VersionedTransaction`);
+
+      // Create a temporary regular transaction for fee estimation
+      const tempTransaction = new Transaction();
+      tempTransaction.feePayer = feePayer;
+
+      // Get fresh blockhash
+      const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
+      tempTransaction.recentBlockhash = blockhash;
+
+      // Add original instructions to temp transaction for estimation
+      instructions.forEach((ix) => tempTransaction.add(ix));
+
+      // Get priority fee estimate
+      const priorityFee = await this.getPriorityFeeEstimate(tempTransaction, feePayer, isAtomic);
+      console.log(`Priority fee for VersionedTransaction: ${priorityFee} microLamports`);
+
+      // Get compute units estimate
+      const computeUnits = await this.estimateComputeUnitsForVersioned(
+        instructions,
+        feePayer,
+        isAtomic,
+      );
+      console.log(`Compute units for VersionedTransaction: ${computeUnits}`);
+
+      // Create compute budget instructions
+      const computeBudgetInstructions = [
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: priorityFee,
+        }),
+        ComputeBudgetProgram.setComputeUnitLimit({
+          units: computeUnits,
+        }),
+      ];
+
+      // Combine compute budget instructions with original instructions
+      const allInstructions = [...computeBudgetInstructions, ...instructions];
+
+      // Create new TransactionMessage with enhanced instructions
+      const enhancedMessage = new TransactionMessage({
+        payerKey: feePayer,
+        recentBlockhash: blockhash,
+        instructions: allInstructions,
+      }).compileToV0Message([]);
+
+      // Create new VersionedTransaction
+      const enhancedVersionedTransaction = new VersionedTransaction(enhancedMessage);
+
+      console.log('Successfully created enhanced VersionedTransaction with priority fee');
+      return enhancedVersionedTransaction;
+    } catch (error) {
+      console.error('Error adding priority fee to VersionedTransaction:', error);
+      throw new Error(
+        `Failed to add priority fee to VersionedTransaction: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Estimate compute units for a VersionedTransaction using instruction analysis
+   */
+  private async estimateComputeUnitsForVersioned(
+    instructions: TransactionInstruction[],
+    feePayer: PublicKey,
+    isAtomic: boolean = false,
+  ): Promise<number> {
+    try {
+      // Create a temporary transaction for simulation
+      const tempTx = new Transaction();
+      tempTx.feePayer = feePayer;
+
+      const { blockhash } = await this.connection.getLatestBlockhash('confirmed');
+      tempTx.recentBlockhash = blockhash;
+
+      // Add all instructions
+      instructions.forEach((ix) => tempTx.add(ix));
+
+      // Use existing estimation method
+      return await this.estimateComputeUnits(tempTx, this.connection, feePayer, isAtomic);
+    } catch (error) {
+      console.error('Error estimating compute units for versioned transaction:', error);
+      return this.getBaselineComputeUnitsForInstructions(instructions, isAtomic);
+    }
+  }
+
+  /**
+   * Get baseline compute units estimate for a set of instructions
+   */
+  private getBaselineComputeUnitsForInstructions(
+    instructions: TransactionInstruction[],
+    isAtomic: boolean = false,
+  ): number {
+    const instructionCounts = instructions.reduce(
+      (counts, ix) => {
+        if (ix.programId.equals(new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'))) {
+          counts.splTokenOps++;
+        }
+        if (ix.data.length > 0) {
+          counts.memoSize += ix.data.length;
+        }
+        if (ix.programId.equals(new PublicKey('SMPLecH534NA9acpos4G6x7uf3LWbCAwZQE9e8ZekMu'))) {
+          counts.squadsOps++;
+        }
+        return counts;
+      },
+      {
+        splTokenOps: 0,
+        memoSize: 0,
+        squadsOps: 0,
+      },
+    );
+
+    const baseUnits = isAtomic ? 300_000 : 200_000;
+    const splTokenUnits = instructionCounts.splTokenOps * 50_000;
+    const memoUnits = Math.ceil(instructionCounts.memoSize * 100);
+    const squadsUnits = instructionCounts.squadsOps * 75_000;
+
+    return baseUnits + splTokenUnits + memoUnits + squadsUnits;
   }
 
   async getPriorityFeeEstimate(

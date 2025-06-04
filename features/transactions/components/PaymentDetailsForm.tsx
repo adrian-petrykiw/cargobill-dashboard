@@ -24,11 +24,14 @@ import { PublicKey } from '@solana/web3.js';
 import { useTokenBalance } from '@/hooks/useTokenBalances';
 import { Organization } from '@/schemas/organization.schema';
 import { useEffect, useState } from 'react';
-import { paymentDetailsSchema, PaymentDetailsFormValues } from '@/schemas/vendor.schema';
-import { EnrichedVendorFormValues } from '@/schemas/vendor.schema';
+import {
+  paymentDetailsSchema,
+  PaymentDetailsFormValues,
+  EnrichedVendorFormValues,
+} from '@/schemas/vendor.schema';
 
 interface PaymentDetailsFormProps {
-  onNext: (data: PaymentDetailsFormValues) => void;
+  onNext: (data: PaymentDetailsFormValues & { onrampFee: number }) => void;
   onBack: () => void;
   vendorFormData: EnrichedVendorFormValues;
   walletAddress: string;
@@ -76,9 +79,41 @@ export function PaymentDetailsForm({
 
   const selectedMethod = form.watch('paymentMethod');
 
+  // Calculate onramp fee based on payment method
+  const calculateOnrampFee = (paymentMethod: string, amount: number): number => {
+    // Business wallet (account_credit) doesn't require onramp, so no fee
+    if (paymentMethod === 'account_credit') {
+      return 0;
+    }
+
+    // For now, using placeholder onramp fees for different payment methods
+    // In the future, this will use the Zynk API to get real quotes
+    const onrampFeeRates = {
+      ach: 0.005, // 0.5% for ACH
+      wire: 0.003, // 0.3% for wire
+      credit_card: 0.029, // 2.9% for credit card
+      debit_card: 0.025, // 2.5% for debit card
+    };
+
+    const rate = onrampFeeRates[paymentMethod as keyof typeof onrampFeeRates] || 0.02; // Default 2%
+    const calculatedFee = amount * rate;
+
+    // Minimum fee of $1, maximum of $100 for placeholder logic
+    return Math.max(1, Math.min(100, calculatedFee));
+  };
+
+  const currentOnrampFee = calculateOnrampFee(selectedMethod, totalAmount);
+  const requiresOnramp = selectedMethod !== 'account_credit';
+
   const onSubmit = (data: PaymentDetailsFormValues) => {
-    // Include the token type
-    onNext(data);
+    // Include the onramp fee in the data
+    const dataWithOnrampFee = {
+      ...data,
+      onrampFee: currentOnrampFee,
+    };
+
+    console.log('Payment data with onramp fee:', dataWithOnrampFee);
+    onNext(dataWithOnrampFee);
   };
 
   const formatBalance = (balance: number | null | undefined) => {
@@ -94,10 +129,10 @@ export function PaymentDetailsForm({
       <div className="flex flex-col h-full">
         <div className="flex-1 overflow-y-auto pb-24">
           <form id="payment-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
-            <Card className="bg-white rounded-lg mb-4 py-0 border-t">
+            <Card className="bg-white rounded-sm mb-4 py-0 border-t">
               <CardContent className="p-4 flex w-full h-full items-center justify-between">
                 <h2 className="font-medium text-md">Total Payment Amount</h2>
-                <p className="text-lg font-bold">
+                <p className="text-md font-semibold">
                   {totalAmount.toFixed(2)} {tokenType}
                 </p>
               </CardContent>
@@ -149,6 +184,22 @@ export function PaymentDetailsForm({
                 )}
               </div>
             )}
+
+            {/* Show onramp fee info for non-business wallet methods */}
+            {/* {requiresOnramp && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-blue-900">Instant Onramp Fee:</span>
+                  <span className="text-sm font-bold text-blue-900">
+                    {currentOnrampFee.toFixed(2)} {tokenType}
+                  </span>
+                </div>
+                <p className="text-xs text-blue-700">
+                  This fee covers the cost of instantly converting your{' '}
+                  {selectedMethod.replace('_', ' ')} payment to {tokenType} in your business wallet.
+                </p>
+              </div>
+            )} */}
 
             {selectedMethod === 'ach' && (
               <div className="space-y-4">

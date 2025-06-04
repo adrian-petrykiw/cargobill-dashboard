@@ -58,9 +58,14 @@ export type EnrichedVendorFormValues = VendorFormValues & {
   receiverDetails?: any;
 };
 
-// Define the payment form schema
+// Define the payment form schema with standardized payment method values
+// Based on transactionMappers.ts mapping to ensure consistency
 export const paymentDetailsSchema = z
   .object({
+    // Frontend payment method values that map to database values via transactionMappers.ts
+    // account_credit -> operational_wallet (business wallet)
+    // ach/wire -> external_bank_account
+    // credit_card/debit_card -> external_card
     paymentMethod: z.enum(['account_credit', 'ach', 'wire', 'credit_card', 'debit_card']),
     tokenType: z.enum(['USDC', 'USDT', 'EURC']),
 
@@ -118,3 +123,11 @@ export const paymentDetailsSchema = z
   );
 
 export type PaymentDetailsFormValues = z.infer<typeof paymentDetailsSchema>;
+
+// Payment method mapping reference (for documentation)
+// Frontend -> Database (via transactionMappers.ts)
+// account_credit -> operational_wallet (business wallet)
+// ach -> external_bank_account
+// wire -> external_bank_account
+// credit_card -> external_card
+// debit_card -> external_card

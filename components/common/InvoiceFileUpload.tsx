@@ -33,9 +33,12 @@ export function InvoiceFileUpload({
 
   return (
     <div className="space-y-0">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1">
         {files.map((file, index) => (
-          <div key={index} className="flex items-center gap-2 bg-muted p-2 rounded-md">
+          <div
+            key={index}
+            className="flex items-center gap-2 bg-slate-100 border-slate-200 border-[1px] p-2 rounded-sm mb-1"
+          >
             <span className="text-sm truncate max-w-[200px]">{file.name}</span>
             <button
               type="button"
@@ -47,7 +50,7 @@ export function InvoiceFileUpload({
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <Button
           type="button"
           variant="ghost"
