@@ -184,8 +184,6 @@ export default function OrganizationTab() {
     }
   };
 
-  // In the OrganizationTab component, modify the handleVerificationClick function:
-
   const handleVerificationClick = () => {
     // Check if country is missing
     if (!organization?.country) {
@@ -198,18 +196,21 @@ export default function OrganizationTab() {
 
     // Different flow for US vs non-US companies
     if (isUSBased) {
-      // For US companies, first create the Zynk entity
-      createZynkEntity()
-        .then(() => {
-          // Then launch Footprint
-          launchFootprintVerification();
-        })
-        .catch((error) => {
-          console.error('Error creating Zynk entity:', error);
-          // Still launch Footprint even if Zynk entity creation fails
-          // We'll try again later during verification
-          launchFootprintVerification();
-        });
+      // // For US companies, first create the Zynk entity
+      // createZynkEntity()
+      //   .then(() => {
+      //     // Then launch Footprint
+      //     launchFootprintVerification();
+      //   })
+      //   .catch((error) => {
+      //     console.error('Error creating Zynk entity:', error);
+      //     // Still launch Footprint even if Zynk entity creation fails
+      //     // We'll try again later during verification
+      //     launchFootprintVerification();
+      //   });
+      toast.error(
+        `Please email support@cargobill.co to verify your business in ${getCountryNameFromAlpha3(organization?.country)}`,
+      );
     } else {
       // For non-US companies, open our custom dialog
       toast.error(
